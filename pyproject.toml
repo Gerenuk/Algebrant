@@ -1,0 +1,9 @@
+[project]
+name = "algebrant"
+version = "0.1"
+authors = [
+  { name="Gerenuk", email="mlpov7f72@mozmail.com" },
+]
+description = "Simple, extensible symbolic algebra"
+readme = "README.md"
+requires-python = ">=3.10"

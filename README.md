@@ -6,11 +6,11 @@ Simple symbolic algebra with support for:
 * Clifford algebra
 * Clifford algebra matrix representations
 
-Meant to be small and structured enough to be extendable.
+Meant to be small and structured enough to be extensible.
 
 # Installation
 
-Currently, clone from Git and include the `src/` directory in PYTHONPATH.
+Currently, clone from Git and include the `src/` directory in PYTHONPATH or with `sys.path.append(..)`.
 
 Required libraries:
 

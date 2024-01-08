@@ -39,19 +39,23 @@ def is_negative(val):
 class ArithmeticMixin:
     # TODO: need to declare that __mul__ and __add__ are required?
 
-    def __pow__(self, other: int):
-        if not isinstance(other, int):
-            raise ValueError(f"Cannot pow by {other}")
+    def __pow__(self, power: int):
+        if not isinstance(power, int):
+            raise ValueError(f"Cannot pow by {power}")
 
-        if not other >= 0:
-            raise ValueError("Can only pow by non-negative integer. Not {other}")
-
-        if other == 0:
+        if power == 0:
             return 1
 
-        result = self
-        for _ in range(other - 1):
-            result *= self
+        if power > 0:
+            result = self
+            for _ in range(power - 1):
+                result *= self
+        else:
+            result = self
+            for _ in range(power - 1):
+                result *= self
+
+            result = 1 / result
 
         return result
 

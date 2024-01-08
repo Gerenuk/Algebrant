@@ -56,7 +56,7 @@ def E(*bases: str | int, make_algebra: bool = True):
     """
     will always be deduplicated and sorted
     """
-    basis = CliffordBasis(frozenset(sorted(sys.intern(f"e{b}") if isinstance(b, int) else b for b in set(bases))))
+    basis = CliffordBasis(tuple(sorted(sys.intern(f"e{b}") if isinstance(b, int) else b for b in set(bases))))
     if not make_algebra:
         return basis
 

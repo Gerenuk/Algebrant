@@ -46,7 +46,8 @@ class CliffordBasis(BaseBasis):
     bases: tuple  # needs to be sorted (or will be sorted by force)
 
     def __post_init__(self):
-        self.bases = tuple(sorted(self.bases))
+        if list(self.bases) != sorted(self.bases):
+            raise ValueError("Bases must be sorted")
 
     def __lt__(self, other):
         """
@@ -145,7 +146,7 @@ class CliffordAlgebra(Algebra):
 
     def conjugate(self):
         """
-        to be called by others who expect .conjugate() like for complex numbers
+        to be called by others who expect .conjugate() like for complex numbers (e.g. numpy)
         """
         return self.c
 

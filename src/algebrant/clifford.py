@@ -21,7 +21,7 @@ except ImportError:
 
 """
 Todos (some old?):
-* implement conjugate for blades squaring to -1 (needed for .h)
+* implement conjugate for blades squaring to -1 (needed for .c)
 * expand in non-orthogonal basis too
 * single element sums unpacked? esp before division
 """
@@ -122,7 +122,7 @@ class CliffordBasis(BaseBasis):
         num_negative_squares = sum(self._vector_squares_to_minus_1(basis) for basis in self.bases)
         is_negative = num_negative_squares % 2 == 1  # assuming negative basis vector change sign
 
-        return (self, -1 if is_negative else 1)  # TODO: returning tuple?; see x.h
+        return (self, -1 if is_negative else 1)  # TODO: returning tuple?; see x.c
 
     @staticmethod
     def _vector_squares_to_minus_1(basis_elem):
@@ -147,7 +147,7 @@ class CliffordAlgebra(Algebra):
         """
         to be called by others who expect .conjugate() like for complex numbers
         """
-        return self.h
+        return self.c
 
     @property
     def i(self):
@@ -164,7 +164,7 @@ class CliffordAlgebra(Algebra):
         Hermitian conjugate
         reverses multi-vectors and take conjugate of coefficients
 
-        therefore always non-negative real for (A.h * A).scalar_part
+        therefore always non-negative real for (A.c * A).scalar_part
         """
         return self.flip_grade_signs(lambda x: x % 4 in (2, 3), factor_conjugate=True)
 
@@ -343,7 +343,7 @@ class CliffordAlgebra(Algebra):
         sesquilinear product (i.e. not symmetric)
         swapping arguments takes complex conjugate
         """
-        result = (self.h * other).scalar_part
+        result = (self.c * other).scalar_part
 
         return result
 

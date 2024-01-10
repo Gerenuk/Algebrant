@@ -1,5 +1,6 @@
 import itertools
 import numbers
+from math import prod
 from operator import itemgetter
 from typing import Any
 
@@ -41,21 +42,16 @@ class ArithmeticMixin:
 
     def __pow__(self, power: int):
         if not isinstance(power, int):
-            raise ValueError(f"Cannot pow by {power}")
+            raise ValueError(f"Cannot pow by {power}. Only integers implemented.")
 
         if power == 0:
-            return 1
-
-        if power > 0:
-            result = self
-            for _ in range(power - 1):
-                result *= self
+            return 1  # assumes 1 is a valid element of the algebra
+        elif power >= 1:
+            result = prod(itertools.repeat(self, power))
+        elif power <= -1:
+            result = prod(itertools.repeat(1 / self, abs(power)))
         else:
-            result = self
-            for _ in range(power - 1):
-                result *= self
-
-            result = 1 / result
+            raise ValueError(f"Power {power} not recognized")
 
         return result
 

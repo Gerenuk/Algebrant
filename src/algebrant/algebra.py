@@ -115,6 +115,9 @@ class Module(ArithmeticMixin):
         self.op_prio = op_prio
         self.clip_small = clip_small
 
+    def transform(self, func):
+        return self._create(func(self.basis_factor))
+
     def _create(self, basis_factor):
         """
         used to create results with appropriate initialization of the same properties

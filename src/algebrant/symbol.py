@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 
 from .base_classes import BaseSymbol
@@ -33,7 +34,7 @@ class Symbol(BaseSymbol):
         Only capitalized symbol names are treated as complex
         """
         if self._needs_conjugate():
-            return self.__class__(self.name, is_conjugate=not self.is_conjugate, color=self.color)
+            return dataclasses.replace(self, is_conjugate=not self.is_conjugate)
 
         return self
 

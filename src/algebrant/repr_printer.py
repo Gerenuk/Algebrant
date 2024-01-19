@@ -21,5 +21,11 @@ class ReprPrinter:
         else:
             self.result_parts.append(str(obj))
 
+    def begin_group(self, _num, text):
+        self.text(text)
+
+    def end_group(self, _num, text):
+        self.text(text)
+
     def break_(self):
         pass

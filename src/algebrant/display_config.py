@@ -9,7 +9,7 @@ def symbol_sort_key(symbol):
         case Symbol(name, is_conjugate):
             key = (0, name, is_conjugate)
         case DerivSymbol(symbol, _, derivativates):
-            key = (1, bool(derivativates), symbol.name)
+            key = (1, bool(derivativates), symbol.name)  # TODO: more specific order?
 
     return key
 

@@ -17,12 +17,6 @@ def particle_sort_order(symbols):
 
 
 def particle_normalize_rule(seq):
-    if len(seq) < 2:
-        return None
-
-    el1 = seq[0]
-    el2 = seq[1]
-
     if len(seq) >= 3:
         el1 = seq[0]
         el2 = seq[1]
@@ -34,20 +28,28 @@ def particle_normalize_rule(seq):
             ) if name1 == name2 == name3 and conj1 == (not conj2) == conj3:
                 return None, 3, (el1,)
 
-    match el1, el2:
-        # order by name
-        case AnnihilationSymbol(name1), AnnihilationSymbol(name2) if name1 > name2:
-            return anti_comm(el1, el2)
+    if len(seq) >= 2:
+        el1 = seq[0]
+        el2 = seq[1]
 
-        # a a -> 0 ; a† a† -> 0
-        case AnnihilationSymbol(name1, conj1), AnnihilationSymbol(name2, conj2) if name1 == name2 and conj1 == conj2:
-            return 0
+        match el1, el2:
+            # order by name
+            case AnnihilationSymbol(name1), AnnihilationSymbol(name2) if name1 > name2:
+                return anti_comm(el1, el2)
 
-        # normal order: a a† -> 1 - a† a
-        case AnnihilationSymbol(name1, conj1), AnnihilationSymbol(
-            name2, conj2
-        ) if name1 == name2 and not conj1 and conj2:
-            return ((tuple(), 1), ((el2, el1), -1)), 2, None
+            # a a -> 0 ; a† a† -> 0
+            case AnnihilationSymbol(name1, conj1), AnnihilationSymbol(
+                name2, conj2
+            ) if name1 == name2 and conj1 == conj2:
+                return 0
+
+            # normal order: a a† -> 1 - a† a
+            case AnnihilationSymbol(name1, conj1), AnnihilationSymbol(
+                name2, conj2
+            ) if name1 == name2 and not conj1 and conj2:
+                return ((tuple(), 1), ((el2, el1), -1)), 2, None
+
+    return None
 
 
 def particle_normalize(basis_factor):

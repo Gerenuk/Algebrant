@@ -10,6 +10,8 @@ def symbol_sort_key(symbol):
             key = (0, name, is_conjugate)
         case DerivSymbol(symbol, _, derivativates):
             key = (1, bool(derivativates), symbol.name)  # TODO: more specific order?
+        case _:
+            return ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
 
     return key
 

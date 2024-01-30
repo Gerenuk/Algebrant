@@ -32,7 +32,9 @@ def is_negative(val):
         or (
             isinstance(val, Algebra)
             and val.basis_factor
-            and all(is_negative(factor) for factor in val.basis_factor.values())
+            and is_negative(
+                sorted(val.basis_factor.items(), key=itemgetter(0))[0][1]
+            )  # factor of first-to-display element
         )
     )
 
@@ -150,6 +152,9 @@ class Module(ArithmeticMixin):
         return other
 
     def __add__(self, other: "Module" | Factor) -> "Module":
+        if other == 0:
+            return self
+
         other_wrapped = self._ensure_prio(other)
 
         if other_wrapped is NotImplemented:
@@ -174,12 +179,20 @@ class Module(ArithmeticMixin):
     def __mul__(self, other: Factor) -> "Module":
         """
         support only multiplication with factor level
+        strictly speaking this makes it a left+right module
+        other factor always unchanged when going through the basis
         """
+        if other == 1:
+            return self
+
         basis_factor = {basis: factor * other for basis, factor in self.basis_factor.items()}
 
         return self._create(basis_factor)
 
     def __rmul__(self, other: Factor) -> "Module":
+        if other == 1:
+            return self
+
         basis_factor = {basis: other * factor for basis, factor in self.basis_factor.items()}
 
         return self._create(basis_factor)
@@ -224,7 +237,7 @@ class Module(ArithmeticMixin):
 
     def _is_long_repr(self):
         return len(self.basis_factor) > MAX_ONE_LINE_ELEM or any(
-            getattr(factor, "_is_long_repr", False) for factor in self.basis_factor.values()
+            hasattr(factor, "_is_long_repr") and factor._is_long_repr() for factor in self.basis_factor.values()
         )
 
     def _repr_pretty_(self, printer, cycle, support_newlines=True):
@@ -265,7 +278,7 @@ class Module(ArithmeticMixin):
                     if not is_first_element:
                         printer.text(" + ")
 
-            if basis == self.unity_basis:
+            if basis.is_unity():
                 printer.pretty(factor)
             elif is_identity(factor):
                 printer.pretty(basis)
@@ -298,9 +311,6 @@ class Module(ArithmeticMixin):
         # return "{" + printer.value() + f";p{self.op_prio}}}"
         return "{" + printer.value() + "}"
 
-    def __invert__(self):
-        return self.conjugate()
-
     @property
     def c(self):
         return self.conjugate()
@@ -331,6 +341,7 @@ class Algebra(Module):
     def __mul__(self, other: "Algebra") -> "Algebra":
         """
         __rmul__ not needed since Algebra*Algebra
+        or multiplied from the right?
         """
         other_wrapped = self._ensure_prio(other)
 
@@ -343,9 +354,9 @@ class Algebra(Module):
         for (basis1, factor1), (basis2, factor2) in itertools.product(
             self.basis_factor.items(), other_wrapped.basis_factor.items()
         ):
-            new_elem = factor1 * factor2 * self._create(basis1 * basis2)
+            new_basis_factor = basis1.mul(factor1, basis2, factor2)
 
-            for result_basis, result_factor in new_elem.basis_factor.items():
+            for result_basis, result_factor in new_basis_factor.items():
                 if result_basis not in basis_factor:
                     basis_factor[result_basis] = result_factor
                 else:

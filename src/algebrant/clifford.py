@@ -49,6 +49,13 @@ class CliffordBasis(BaseBasis):
         if list(self.bases) != sorted(self.bases):
             raise ValueError("Bases must be sorted")
 
+    @classmethod
+    def unity(cls):
+        return cls(tuple())
+
+    def is_unity(self):
+        return self.bases == tuple()
+
     def __lt__(self, other):
         """
         only for sorting display

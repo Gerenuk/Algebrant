@@ -1,3 +1,4 @@
+import dataclasses
 from collections import Counter
 from dataclasses import dataclass
 from fractions import Fraction
@@ -22,17 +23,27 @@ class Symbols(BaseBasis):
     def __post_init__(self):
         self.symbol_powers = frozenset((sym, cnt) for sym, cnt in self.symbol_powers if cnt != 0)
 
+    @classmethod
+    def unity(cls):
+        return cls(frozenset())
+
+    def is_unity(self):
+        return self.symbol_powers == frozenset()
+
+    def _create(self, symbol_powers):
+        return dataclasses.replace(self, symbol_powers=symbol_powers)
+
     def conjugate(self):
-        return Symbols((sym.conjugate(), cnt) for sym, cnt in self.symbol_powers)
+        return self._create(symbol_powers=frozenset((sym.conjugate(), cnt) for sym, cnt in self.symbol_powers))
 
     def inverse(self):
-        return {Symbols(((sym, -power) for sym, power in self.symbol_powers)): 1}
+        return {self._create(frozenset(((sym, -power) for sym, power in self.symbol_powers))): 1}
 
     def __mul__(self, other: "Symbols") -> dict:
         symbol_powers = Counter(dict(self.symbol_powers))
         symbol_powers.update(dict(other.symbol_powers))  # so that do not lose negative
 
-        return {Symbols((symbol_powers.items())): 1}  # TODO: Counter[str] to dict[str, float]
+        return {self._create(frozenset((symbol_powers.items()))): 1}
 
     def __lt__(self, other):
         return symbols_sort_key(self) < symbols_sort_key(other)

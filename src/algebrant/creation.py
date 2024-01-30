@@ -7,7 +7,7 @@ from .algebra import Algebra
 from .clifford import CliffordAlgebra, CliffordBasis
 from .deriv_symbol import DerivSymbol
 from .nc_symbols import NCSymbols
-from .particle_op import AnnihilationSymbol, particle_normalize, particle_sort_order
+from .nullvector import NullVector, NullVectorSymbols
 from .symbol import Symbol
 from .symbols import Symbols
 
@@ -18,26 +18,19 @@ Most are included with `from algebrant import *` (through `__init__.py`)
 """
 
 CLIFFORD_OP_PRIO = 0
-PARTICLE_OP_PRIO = 0  # currently particle anc clifford symbols do not interact well
+NULLVECTOR_OP_PRIO = 0  # currently no consistent solution with clifford op_prio
 NC_SYMBOL_OP_PRIO = 1
 SYMBOL_OP_PRIO = 2
 
 
-CLIFFORD_UNITY_BASIS = CliffordBasis(tuple())
-SYMBOL_UNITY_BASIS = Symbols(frozenset())
-NC_SYMBOL_UNITY_BASIS = NCSymbols(tuple())
-PARTICLE_UNITY_BASIS = NCSymbols(
-    tuple(), sort_order=particle_sort_order
-)  # TODO: need other check for unity basis or else __eq__ fails to be precise
-
-PARTICLE_COLOR = colorful.hotPink
+NULLVECTOR_COLOR = colorful.hotPink
 
 
-def S(name: str, power: int = 1):
+def S(name: str, *, power: int = 1):
     return Algebra(
         {Symbols(frozenset(((Symbol(name), power),))): 1},
         op_prio=SYMBOL_OP_PRIO,
-        unity_basis=SYMBOL_UNITY_BASIS,
+        unity_basis=Symbols.unity(),
     )
 
 
@@ -48,22 +41,20 @@ def Snc(*names: str):
     return Algebra(
         {NCSymbols(tuple(Symbol(name) for name in names)): 1},
         op_prio=NC_SYMBOL_OP_PRIO,
-        unity_basis=NC_SYMBOL_UNITY_BASIS,
+        unity_basis=NCSymbols.unity(),
     )
 
 
-def E(*bases: str | int, make_algebra: bool = True):
+def E(*bases: str | int):
     """
     will always be deduplicated and sorted
     """
     basis = CliffordBasis(tuple(sorted(sys.intern(f"e{b}") if isinstance(b, int) else b for b in set(bases))))
-    if not make_algebra:
-        return basis
 
     return CliffordAlgebra(
         {basis: 1},
         op_prio=CLIFFORD_OP_PRIO,
-        unity_basis=CLIFFORD_UNITY_BASIS,
+        unity_basis=CliffordBasis.unity(),
     )
 
 
@@ -87,16 +78,15 @@ def Func(name: str, parameters: tuple[str] = tuple(), *, deriv: dict[str, int] =
             ): 1
         },
         op_prio=SYMBOL_OP_PRIO,
-        unity_basis=SYMBOL_UNITY_BASIS,
+        unity_basis=Symbols.unity(),
     )
 
 
-def AnnOp(name: str):
+def NV(name):
     return Algebra(
-        {NCSymbols((AnnihilationSymbol(name, color=PARTICLE_COLOR),), sort_order=particle_sort_order): 1},
-        op_prio=PARTICLE_OP_PRIO,
-        unity_basis=PARTICLE_UNITY_BASIS,
-        normalize=particle_normalize,
+        {NullVectorSymbols((NullVector(name, color=NULLVECTOR_COLOR),)): 1},
+        op_prio=NULLVECTOR_OP_PRIO,
+        unity_basis=NullVectorSymbols.unity(),
     )
 
 

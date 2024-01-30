@@ -24,6 +24,13 @@ class BaseBasis(ABC):
     make sure to return Algebra.UNITY_BASIS when appropriate
     """
 
+    def mul(self, factor1, basis2, factor2):
+        """
+        used by Algebra multiplication and needed factor2 has no-trivial change when going through basis1
+        """
+        prod_factor = factor1 * factor2
+        return {basis: prod_factor * factor for basis, factor in (self * basis2).items()}
+
     @abstractmethod
     def __mul__(self, other) -> dict:
         pass

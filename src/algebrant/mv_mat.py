@@ -36,14 +36,18 @@ def make_mat_basis(n):
     return make_mat_basis_from_pauli(indices)
 
 
+def make_mv_vec_basis(dim, start_idx=1):
+    return VecBasis(
+        [E(*idxs) for k in range(0, dim + 1) for idxs in combinations(range(start_idx, start_idx + dim), r=k)],
+        dot=lambda a, b: (a.c * b).scalar_part,
+    )
+
+
 class CliffordMatrixRepr:
     def __init__(self, vec_mats):
         clifford_dim = len(vec_mats)
 
-        self.mv_basis = VecBasis(
-            [E(*idxs) for k in range(0, clifford_dim + 1) for idxs in combinations(range(1, clifford_dim + 1), r=k)],
-            dot=lambda a, b: (a.c * b).scalar_part,
-        )
+        self.mv_basis = make_mv_vec_basis(clifford_dim, start_idx=1)
 
         mat_dim = vec_mats[0].shape[0]
 

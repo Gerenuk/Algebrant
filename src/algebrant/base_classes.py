@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import ABC, abstractmethod, abstractproperty
 from dataclasses import dataclass
 
 
@@ -14,6 +14,7 @@ class BaseSymbol(ABC):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def conjugate(self):
         raise NotImplementedError()
 
@@ -21,7 +22,6 @@ class BaseSymbol(ABC):
 class BaseBasis(ABC):
     """
     basis for algebra with multiplication
-    make sure to return Algebra.UNITY_BASIS when appropriate
     """
 
     def mul(self, factor1, basis2, factor2):
@@ -30,6 +30,14 @@ class BaseBasis(ABC):
         """
         prod_factor = factor1 * factor2
         return {basis: prod_factor * factor for basis, factor in (self * basis2).items()}
+
+    @abstractmethod
+    def conjugate(self, factor) -> tuple():
+        pass
+
+    @abstractproperty
+    def scalar_part(self):
+        pass
 
     @abstractmethod
     def __mul__(self, other) -> dict:

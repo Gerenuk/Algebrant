@@ -117,7 +117,7 @@ class Module(ArithmeticMixin):
         self.op_prio = op_prio
         self.clip_small = clip_small
 
-    def transform(self, func):
+    def transform(self, func):  # currently not used much
         return self._create(func(self.basis_factor))
 
     def _create(self, basis_factor):
@@ -225,10 +225,23 @@ class Module(ArithmeticMixin):
         """
         return self.basis_factor[basis]
 
+    @property
+    def scalar_part(self):
+        """
+        return 0 if not explicit unity part
+        """
+        return sum(
+            factor_scalar * basis_scalar
+            for basis, factor in self.basis_factor.items()
+            for factor_scalar, basis_scalar in [(getattr(factor, "scalar_part", factor), basis.scalar_part)]
+            if basis_scalar != 0
+        )
+
     def _unity(self, factor: Factor):  # TODO: annotate cls
         """
         Returns 1 element
         Needed update upgrade factors with a basis for operations
+        e.g. when adding a scalar value
         """
         return self._create({self.unity_basis: factor})
 
@@ -278,26 +291,24 @@ class Module(ArithmeticMixin):
                     if not is_first_element:
                         printer.text(" + ")
 
-            if basis.is_unity():
+            factor_needs_parenthesis = (isinstance(factor, Module) and len(factor.basis_factor) > 1) or (
+                isinstance(factor, numbers.Complex) and factor.real != 0 and factor.imag != 0
+            )
+
+            if factor_needs_parenthesis:
+                # printer.text("(")
+                printer.begin_group(3, "(")
+
+            if basis.is_unity() or not is_identity(factor):
                 printer.pretty(factor)
-            elif is_identity(factor):
+
+            if factor_needs_parenthesis:
+                # printer.text(")")
+                printer.end_group(3, ")")
+
+            if not basis.is_unity():
+                printer.text(" ")
                 printer.pretty(basis)
-            else:
-                factor_needs_parenthesis = (isinstance(factor, Module) and len(factor.basis_factor) > 1) or (
-                    isinstance(factor, numbers.Complex) and factor.real != 0 and factor.imag != 0
-                )
-
-                if factor_needs_parenthesis:
-                    # printer.text("(")
-                    printer.begin_group(3, "(")
-                printer.pretty(factor)
-                if factor_needs_parenthesis:
-                    # printer.text(")")
-                    printer.end_group(3, ")")
-
-                if not basis == self.unity_basis:
-                    printer.text(" ")
-                    printer.pretty(basis)
 
             if long_algebra:
                 printer.break_()
@@ -323,10 +334,11 @@ class Module(ArithmeticMixin):
         return self._create(
             {
                 # fmt: off
-                conjugate(basis):
-                conjugate(factor)
+                new_basis:
+                new_factor
                 # fmt: on
                 for basis, factor in self.basis_factor.items()
+                for new_basis, new_factor in [basis.conjugate(factor)]
             }
         )
 

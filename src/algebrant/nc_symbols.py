@@ -19,8 +19,12 @@ class NCSymbols(BaseBasis):
     symbols: tuple[BaseSymbol]
     sort_order: callable = default_sort_order
 
-    def conjugate(self):
-        return self._create(tuple(sym.conjugate() for sym in reversed(self.symbols)))
+    def conjugate(self, factor):
+        return self._create(tuple(sym.conjugate() for sym in reversed(self.symbols))), factor.conjugate()
+
+    @property
+    def scalar_part(self):
+        raise NotImplementedError()
 
     @classmethod
     def unity(cls):

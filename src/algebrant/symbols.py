@@ -23,6 +23,13 @@ class Symbols(BaseBasis):
     def __post_init__(self):
         self.symbol_powers = frozenset((sym, cnt) for sym, cnt in self.symbol_powers if cnt != 0)
 
+    @property
+    def scalar_part(self):
+        if self.symbol_powers == frozenset():
+            return 1
+
+        return 0
+
     @classmethod
     def unity(cls):
         return cls(frozenset())
@@ -33,8 +40,11 @@ class Symbols(BaseBasis):
     def _create(self, symbol_powers):
         return dataclasses.replace(self, symbol_powers=symbol_powers)
 
-    def conjugate(self):
-        return self._create(symbol_powers=frozenset((sym.conjugate(), cnt) for sym, cnt in self.symbol_powers))
+    def conjugate(self, factor):
+        return (
+            self._create(symbol_powers=frozenset((sym.conjugate(), cnt) for sym, cnt in self.symbol_powers)),
+            factor.conjugate(),
+        )
 
     def inverse(self):
         return {self._create(frozenset(((sym, -power) for sym, power in self.symbol_powers))): 1}

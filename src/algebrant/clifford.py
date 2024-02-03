@@ -53,6 +53,13 @@ class CliffordBasis(BaseBasis):
     def unity(cls):
         return cls(tuple())
 
+    @property
+    def scalar_part(self):
+        if self.bases == tuple():
+            return 1
+
+        return 0
+
     def is_unity(self):
         return self.bases == tuple()
 
@@ -125,12 +132,18 @@ class CliffordBasis(BaseBasis):
 
         return -1 if is_negative else 1
 
-    def conjugate(self):
+    def conjugate(self, factor):
+        if len(self.bases) % 4 in (2, 3):
+            factor_sign = -1
+        else:
+            factor_sign = 1
+
         # check for vectors squaring to -1
         num_negative_squares = sum(self._vector_squares_to_minus_1(basis) for basis in self.bases)
-        is_negative = num_negative_squares % 2 == 1  # assuming negative basis vector change sign
+        if num_negative_squares % 2 == 1:  # assuming negative basis vector change sign
+            factor_sign = -factor_sign
 
-        return (self, -1 if is_negative else 1)  # TODO: returning tuple?; see x.c
+        return self, factor_sign * factor.conjugate()
 
     @staticmethod
     def _vector_squares_to_minus_1(basis_elem):
@@ -151,12 +164,6 @@ class CliffordAlgebra(Algebra):
     basis elements must be CliffordBases with tuples
     """
 
-    def conjugate(self):
-        """
-        to be called by others who expect .conjugate() like for complex numbers (e.g. numpy)
-        """
-        return self.c
-
     @property
     def i(self):
         """
@@ -165,16 +172,6 @@ class CliffordAlgebra(Algebra):
         satisfies (A * B).i = A.i * B.i
         """
         return self.flip_grade_signs(lambda x: x % 2 == 1)
-
-    @property
-    def c(self):
-        """
-        Hermitian conjugate
-        reverses multi-vectors and take conjugate of coefficients
-
-        therefore always non-negative real for (A.c * A).scalar_part
-        """
-        return self.flip_grade_signs(lambda x: x % 4 in (2, 3), factor_conjugate=True)
 
     @property
     def r(self):
@@ -400,16 +397,6 @@ class CliffordAlgebra(Algebra):
     @property
     def grades(self):
         return frozenset(basis.grade for basis in self.basis_factor.keys())
-
-    @property
-    def scalar_part(self):
-        """
-        return 0 if not explicit unity part
-        """
-        if not self.basis_factor:
-            return 0
-
-        return self.basis_factor.get(self.unity_basis, 0)
 
 
 def ga_basis_mul(basis1, basis2):

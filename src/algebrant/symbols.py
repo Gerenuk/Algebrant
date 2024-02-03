@@ -3,6 +3,7 @@ from collections import Counter
 from dataclasses import dataclass
 from fractions import Fraction
 
+from .algebra import Algebra
 from .base_classes import BaseBasis
 from .display_config import symbol_sort_key
 from .repr_printer import ReprPrinter
@@ -25,10 +26,7 @@ class Symbols(BaseBasis):
 
     @property
     def scalar_part(self):
-        if self.symbol_powers == frozenset():
-            return 1
-
-        return 0
+        return self
 
     @classmethod
     def unity(cls):
@@ -104,3 +102,9 @@ class Symbols(BaseBasis):
         printer = ReprPrinter()
         self._repr_pretty_(printer, cycle=False)
         return printer.value()
+
+
+class SymbolAlgebra(Algebra):
+    @property
+    def scalar_part(self):
+        return self

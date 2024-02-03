@@ -9,7 +9,7 @@ from .deriv_symbol import DerivSymbol
 from .nc_symbols import NCSymbols
 from .nullvector import NullVector, NullVectorSymbols
 from .symbol import Symbol
-from .symbols import Symbols
+from .symbols import SymbolAlgebra, Symbols
 
 """
 Main shortcut for creating objects
@@ -27,7 +27,7 @@ NULLVECTOR_COLOR = colorful.hotPink
 
 
 def S(name: str, *, power: int = 1):
-    return Algebra(
+    return SymbolAlgebra(
         {Symbols(frozenset(((Symbol(name), power),))): 1},
         op_prio=SYMBOL_OP_PRIO,
         unity_basis=Symbols.unity(),

@@ -6,8 +6,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .algebra import Algebra, conjugate
+from .algebra import Algebra
 from .base_classes import BaseBasis
+from .common import conjugate
 from .repr_printer import ReprPrinter
 
 try:

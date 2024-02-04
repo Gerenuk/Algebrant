@@ -4,7 +4,7 @@ from math import prod
 from operator import itemgetter
 from typing import Any
 
-from .common import conjugate, is_identity, is_zero
+from .common import is_identity, is_zero
 from .display_config import MAX_ONE_LINE_ELEM
 from .quotient import Quotient
 from .repr_printer import ReprPrinter
@@ -291,15 +291,19 @@ class Module(ArithmeticMixin):
                     if not is_first_element:
                         printer.text(" + ")
 
-            factor_needs_parenthesis = (isinstance(factor, Module) and len(factor.basis_factor) > 1) or (
-                isinstance(factor, numbers.Complex) and factor.real != 0 and factor.imag != 0
-            )
+            factor_needs_parenthesis = (
+                isinstance(factor, Module)
+                and len(factor.basis_factor) > 1
+                and not (len(self.basis_factor) == 1 and basis.is_unity())
+            ) or (isinstance(factor, numbers.Complex) and factor.real != 0 and factor.imag != 0)
 
             if factor_needs_parenthesis:
                 # printer.text("(")
                 printer.begin_group(3, "(")
 
-            if basis.is_unity() or not is_identity(factor):
+            do_print_factor = basis.is_unity() or not is_identity(factor)
+
+            if do_print_factor:
                 printer.pretty(factor)
 
             if factor_needs_parenthesis:
@@ -307,7 +311,9 @@ class Module(ArithmeticMixin):
                 printer.end_group(3, ")")
 
             if not basis.is_unity():
-                printer.text(" ")
+                if do_print_factor:
+                    printer.text(" ")
+
                 printer.pretty(basis)
 
             if long_algebra:
@@ -320,7 +326,7 @@ class Module(ArithmeticMixin):
         printer = ReprPrinter()
         self._repr_pretty_(printer, cycle=False, support_newlines=False)
         # return "{" + printer.value() + f";p{self.op_prio}}}"
-        return "{" + printer.value() + "}"
+        return "{ " + printer.value() + " }"
 
     @property
     def c(self):

@@ -1,7 +1,7 @@
 from .deriv_symbol import DerivSymbol
 from .symbol import Symbol
 
-MAX_ONE_LINE_ELEM = 4
+MAX_ONE_LINE_ELEM = 3
 
 
 def symbol_sort_key(symbol):

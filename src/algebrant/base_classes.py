@@ -32,28 +32,28 @@ class BaseBasis(ABC):
         return {basis: prod_factor * factor for basis, factor in (self * basis2).items()}
 
     @abstractmethod
-    def conjugate(self, factor) -> tuple():
-        pass
+    def conjugate(self, factor) -> tuple():  # needs this name because apparently someone checks for "conjugate" name
+        raise NotImplementedError()
 
     @abstractproperty
     def scalar_part(self):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def __mul__(self, other) -> dict:
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def __hash__(self):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
     def __eq__(self, other):
-        pass
+        raise NotImplementedError()
 
     @abstractmethod
-    def __lt__(self, other):  # for sorting repr
-        pass
+    def _sort_key(self):  # for sorting repr
+        raise NotImplementedError()
 
     def inverse(self) -> dict:
         """

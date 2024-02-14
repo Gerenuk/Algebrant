@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from itertools import groupby
 from operator import attrgetter
 
+from .algebra import Algebra
 from .nc_symbols import NCSymbols
 from .symbol import Symbol
 
@@ -21,6 +22,42 @@ class NullVector(Symbol):
         printer.pretty(self.color(self.name + ("†" if self.is_conjugate else "")))
 
 
+def _reverse_symbols(symbols):
+    new_symbols = []
+
+    num_odd = 0
+
+    for _name, sym_gr in groupby(symbols, key=attrgetter("name")):
+        sym_gr = tuple(sym_gr)
+        new_symbols.extend(sym for sym in reversed(sym_gr))
+
+        if len(sym_gr) % 2 == 1:
+            num_odd += 1
+
+    if num_odd % 4 in (2, 3):
+        factor_sign = -1
+    else:
+        factor_sign = 1
+
+    return tuple(new_symbols), factor_sign
+
+
+class NullVectorAlgebra(Algebra):
+    @property
+    def r(self):
+        """
+        Reverse (Anti-involution)
+        """
+        return self.linear_func("r")
+
+    @property
+    def cl(self):
+        """
+        Clifford conjugate (Involution)
+        """
+        return self.linear_func("cl")
+
+
 @dataclass(unsafe_hash=True, order=True, repr=False)
 class NullVectorSymbols(NCSymbols):
     """
@@ -28,27 +65,29 @@ class NullVectorSymbols(NCSymbols):
     """
 
     def conjugate(self, factor):
-        new_symbols = []
+        reversed_symbols, factor_sign = _reverse_symbols(self.symbols)
 
-        num_odd = 0
+        return self._create(tuple(sym.conjugate() for sym in reversed_symbols)), factor_sign * factor.conjugate()
 
-        for _name, sym_gr in groupby(self.symbols, key=attrgetter("name")):
-            sym_gr = tuple(sym_gr)
-            new_symbols.extend(sym.conjugate() for sym in reversed(sym_gr))
+    def r(self, factor):
+        """
+        Reverse (Anti-involution)
+        """
+        reversed_symbols, factor_sign = _reverse_symbols(self.symbols)
 
-            if len(sym_gr) % 2 == 1:
-                num_odd += 1
+        return self._create(reversed_symbols), factor_sign * factor
 
-        if num_odd % 4 in (2, 3):
-            factor_sign = -1
-        else:
-            factor_sign = 1
+    def cl(self, factor):
+        """
+        Clifford conjugate (Involution)
+        """
+        sign = -1 if len(self.symbols) % 2 == 1 else 1
 
-        return self._create(tuple(new_symbols)), factor_sign * factor.conjugate()
+        return self, sign * factor
 
     def __mul__(self, other):
         """
-        return normal ordered result
+        return normalized result
         """
 
         assert list(self.symbols) == sorted(self.symbols, key=lambda s: s.name), self.symbols
@@ -137,41 +176,44 @@ class NullVectorSymbols(NCSymbols):
         assert (names := [symbol.name for symbol in name_ordered]) == sorted(names), name_ordered
 
         ## Normal order
-        factors = []
-        part = []
-        for _name, group in groupby(name_ordered, key=attrgetter("name")):
-            group = tuple(group)
+        # factors = []
+        # part = []
+        # for _name, group in groupby(name_ordered, key=attrgetter("name")):
+        #     group = tuple(group)
 
-            assert len(group) <= 2, group
+        #     assert len(group) <= 2, group
 
-            if len(group) == 1 or (len(group) == 2 and group[0].is_conjugate and not group[1].is_conjugate):
-                part.extend(group)
-                continue
+        #     if len(group) == 1 or (len(group) == 2 and group[0].is_conjugate and not group[1].is_conjugate):
+        #         part.extend(group)
+        #         continue
 
-            assert not group[0].is_conjugate and group[1].is_conjugate, group
+        #     assert not group[0].is_conjugate and group[1].is_conjugate, group
 
-            if part:
-                factors.append(((part, 1),))
-                part = []
+        #     if part:
+        #         factors.append(((part, 1),))
+        #         part = []
 
-            factors.append(((tuple(), 1), ((group[1], group[0]), -1)))
+        #     factors.append(((tuple(), 1), ((group[1], group[0]), -1)))
 
-        if part:
-            factors.append(((part, 1),))
+        # if part:
+        #     factors.append(((part, 1),))
 
-        result = {}
-        for factor_prod in itertools.product(*factors):
-            basis = self._create(tuple(itertools.chain.from_iterable(basis for basis, _factor in factor_prod)))
-            total_factor = reorder_factor * math.prod(factor for _basis, factor in factor_prod)
+        # result = {}
+        # for factor_prod in itertools.product(*factors):
+        #     basis = self._create(tuple(itertools.chain.from_iterable(basis for basis, _factor in factor_prod)))
+        #     total_factor = reorder_factor * math.prod(factor for _basis, factor in factor_prod)
 
-            assert basis._validated_basis(), basis.symbols
+        #     assert basis._validated_basis(), basis.symbols
 
-            if basis in result:
-                result[basis] += total_factor
-            else:
-                result[basis] = total_factor
+        #     if basis in result:
+        #         result[basis] += total_factor
+        #     else:
+        #         result[basis] = total_factor
+
+        result = {self._create(tuple(name_ordered)): reorder_factor}
 
         return result
 
     def _validated_basis(self):
-        return list(self.symbols) == sorted(self.symbols, key=lambda s: (s.name, not s.is_conjugate))
+        # return list(self.symbols) == sorted(self.symbols, key=lambda s: (s.name, not s.is_conjugate))  # if normal order
+        return list(self.symbols) == sorted(self.symbols, key=lambda s: s.name)

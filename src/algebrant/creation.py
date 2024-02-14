@@ -7,7 +7,7 @@ from .algebra import Algebra
 from .clifford import CliffordAlgebra, CliffordBasis
 from .deriv_symbol import DerivSymbol
 from .nc_symbols import NCSymbols
-from .nullvector import NullVector, NullVectorSymbols
+from .nullvector import NullVector, NullVectorAlgebra, NullVectorSymbols
 from .symbol import Symbol
 from .symbols import SymbolAlgebra, Symbols
 
@@ -62,7 +62,7 @@ def Func(name: str, parameters: tuple[str] = tuple(), *, deriv: dict[str, int] =
     if deriv is None:
         deriv = {}
 
-    return Algebra(
+    return SymbolAlgebra(
         {
             Symbols(
                 (
@@ -83,7 +83,7 @@ def Func(name: str, parameters: tuple[str] = tuple(), *, deriv: dict[str, int] =
 
 
 def NV(name):
-    return Algebra(
+    return NullVectorAlgebra(
         {NullVectorSymbols((NullVector(name, color=NULLVECTOR_COLOR),)): 1},
         op_prio=NULLVECTOR_OP_PRIO,
         unity_basis=NullVectorSymbols.unity(),

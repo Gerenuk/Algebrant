@@ -64,11 +64,8 @@ class CliffordBasis(BaseBasis):
     def is_unity(self):
         return self.bases == tuple()
 
-    def __lt__(self, other):
-        """
-        only for sorting display
-        """
-        return len(self.bases) < len(other.bases) or (len(self.bases) == len(other.bases) and self.bases < other.bases)
+    def _sort_key(self):
+        return (len(self.bases), self.bases)
 
     def __mul__(self, other: "CliffordBasis") -> dict:
         common_bases = set(self.bases) & set(other.bases)

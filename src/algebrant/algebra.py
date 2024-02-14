@@ -4,6 +4,7 @@ from math import prod
 from operator import itemgetter
 from typing import Any
 
+from .base_classes import BaseBasis
 from .common import is_identity, is_zero
 from .display_config import MAX_ONE_LINE_ELEM
 from .quotient import Quotient
@@ -33,7 +34,7 @@ def is_negative(val):
             isinstance(val, Algebra)
             and val.basis_factor
             and is_negative(
-                sorted(val.basis_factor.items(), key=itemgetter(0))[0][1]
+                sorted(val.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())[0][1]
             )  # factor of first-to-display element
         )
     )
@@ -81,7 +82,9 @@ class Module(ArithmeticMixin):
     Will drop terms which are very small compared to the total magnitude
     """
 
-    def __init__(self, basis_factor: dict, *, unity_basis, op_prio, normalize=None, clip_small=1e-10) -> None:
+    def __init__(
+        self, basis_factor: dict[BaseBasis, Any], *, unity_basis, op_prio, normalize=None, clip_small=1e-10
+    ) -> None:
         """
         op_prio: low is highest prio; less prio will pass operation to more prio
         """
@@ -248,11 +251,6 @@ class Module(ArithmeticMixin):
     def _zero(self):  # rarely needed
         return self._create({})
 
-    def _is_long_repr(self):
-        return len(self.basis_factor) > MAX_ONE_LINE_ELEM or any(
-            hasattr(factor, "_is_long_repr") and factor._is_long_repr() for factor in self.basis_factor.values()
-        )
-
     def _repr_pretty_(self, printer, cycle, support_newlines=True):
         if cycle:
             return printer.text("...")
@@ -261,54 +259,61 @@ class Module(ArithmeticMixin):
             printer.text("0")
             return
 
-        long_algebra = support_newlines and self._is_long_repr()
+        multi_line = support_newlines and len(self.basis_factor) > 1 and _is_long_repr(self.basis_factor)
+
+        # print(f"{multi_line=} {support_newlines=} {len(self.basis_factor)=} {_is_long_repr(self.basis_factor)=}")
+
+        # idx_last_basis_factor = len(self.basis_factor) - 1
 
         for i, (basis, factor) in enumerate(
-            sorted(self.basis_factor.items(), key=itemgetter(0))
+            sorted(self.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())
         ):  # assumes basis has __lt__
             is_first_element = i == 0
 
             if is_negative(factor):
-                if long_algebra:
-                    if is_first_element:
-                        printer.text(" -")
-                    else:
-                        printer.text("- ")
-                else:
-                    if is_first_element:
-                        printer.text("-")
-                    else:
-                        printer.text(" - ")
-
+                neg_sign = True
                 factor = -factor
             else:
-                if long_algebra:
-                    if is_first_element:
-                        printer.text("  ")
-                    else:
-                        printer.text("+ ")
-                else:
-                    if not is_first_element:
-                        printer.text(" + ")
+                neg_sign = False
 
-            factor_needs_parenthesis = (
-                isinstance(factor, Module)
-                and len(factor.basis_factor) > 1
-                and not (len(self.basis_factor) == 1 and basis.is_unity())
-            ) or (isinstance(factor, numbers.Complex) and factor.real != 0 and factor.imag != 0)
+            if multi_line:
+                if is_first_element:
+                    printer.text("  " if not neg_sign else " -")
+                    printer.begin_group(2)
+                else:
+                    printer.end_group(2)
+                    printer.break_()
+                    printer.text("+ " if not neg_sign else "- ")
+                    printer.begin_group(2)
+            else:
+                if is_first_element:
+                    printer.text("" if not neg_sign else "-")
+                else:
+                    printer.text(" + " if not neg_sign else " - ")
+
+            do_print_factor = basis.is_unity() or not is_identity(factor)
+
+            factor_needs_parenthesis = do_print_factor and _repr_needs_parenthesis(factor)
+
+            # from .nc_symbols import NCSymbols
+
+            # if isinstance(basis, NCSymbols):
+            # print(f"{do_print_factor=} {factor_needs_parenthesis=} {basis=} {factor=} {basis.is_unity()=}")
 
             if factor_needs_parenthesis:
                 # printer.text("(")
-                printer.begin_group(3, "(")
+                import pdb
 
-            do_print_factor = basis.is_unity() or not is_identity(factor)
+                # pdb.set_trace()
+
+                printer.begin_group(1, "(")
 
             if do_print_factor:
                 printer.pretty(factor)
 
             if factor_needs_parenthesis:
                 # printer.text(")")
-                printer.end_group(3, ")")
+                printer.end_group(1, ")")
 
             if not basis.is_unity():
                 if do_print_factor:
@@ -316,11 +321,8 @@ class Module(ArithmeticMixin):
 
                 printer.pretty(basis)
 
-            if long_algebra:
-                printer.break_()
-
-        # if long_algebra:
-        #    printer.end_group(3)
+        if multi_line:
+            printer.end_group(2)
 
     def __repr__(self):
         printer = ReprPrinter()
@@ -332,11 +334,7 @@ class Module(ArithmeticMixin):
     def c(self):
         return self.conjugate()
 
-    def conjugate(self):
-        """
-        takes conjugate separately on basis and factor (for performance)
-        not appropriate when conjugate of basis introduces new factor
-        """
+    def linear_func(self, func_name):
         return self._create(
             {
                 # fmt: off
@@ -344,9 +342,35 @@ class Module(ArithmeticMixin):
                 new_factor
                 # fmt: on
                 for basis, factor in self.basis_factor.items()
-                for new_basis, new_factor in [basis.conjugate(factor)]
+                for new_basis, new_factor in [getattr(basis, func_name)(factor)]
+                if new_factor != 0
             }
         )
+
+    def conjugate(self):
+        """
+        takes conjugate separately on basis and factor (for performance)
+        not appropriate when conjugate of basis introduces new factor
+        """
+        return self.linear_func("conjugate")
+
+
+def _repr_needs_parenthesis(factor):
+    if isinstance(factor, numbers.Complex):
+        return factor.real != 0 and factor.imag != 0
+
+    if isinstance(factor, Module):
+        return len(factor.basis_factor) > 1
+
+    return True
+
+
+def _is_long_repr(basis_factor):
+    result = len(basis_factor) > MAX_ONE_LINE_ELEM or any(
+        isinstance(factor, Module) and _is_long_repr(factor.basis_factor) for factor in basis_factor.values()
+    )
+
+    return result
 
 
 class Algebra(Module):

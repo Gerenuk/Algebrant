@@ -44,10 +44,10 @@ def make_mv_vec_basis(dim, start_idx=1):
 
 
 class CliffordMatrixRepr:
-    def __init__(self, vec_mats):
+    def __init__(self, vec_mats, start_idx=1):
         clifford_dim = len(vec_mats)
 
-        self.mv_basis = make_mv_vec_basis(clifford_dim, start_idx=1)
+        self.mv_basis = make_mv_vec_basis(clifford_dim, start_idx=start_idx)
 
         mat_dim = vec_mats[0].shape[0]
 

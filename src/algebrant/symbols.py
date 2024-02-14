@@ -10,13 +10,6 @@ from .repr_printer import ReprPrinter
 from .symbol import BaseSymbol
 
 
-def symbols_sort_key(symbols):
-    degree = sum(abs(power) for _sym, power in symbols.symbol_powers)
-    symbol_powers = sorted((symbol_sort_key(sym), -power) for sym, power in symbols.symbol_powers)
-
-    return (degree, symbol_powers)
-
-
 @dataclass(unsafe_hash=True)
 class Symbols(BaseBasis):
     symbol_powers: frozenset[tuple[BaseSymbol, int]]
@@ -44,6 +37,12 @@ class Symbols(BaseBasis):
             factor.conjugate(),
         )
 
+    def _sort_key(self):
+        degree = sum(abs(power) for _sym, power in self.symbol_powers)
+        symbol_powers = sorted((symbol_sort_key(sym), -power) for sym, power in self.symbol_powers)
+
+        return (degree, symbol_powers)
+
     def inverse(self):
         return {self._create(frozenset(((sym, -power) for sym, power in self.symbol_powers))): 1}
 
@@ -52,9 +51,6 @@ class Symbols(BaseBasis):
         symbol_powers.update(dict(other.symbol_powers))  # so that do not lose negative
 
         return {self._create(frozenset((symbol_powers.items()))): 1}
-
-    def __lt__(self, other):
-        return symbols_sort_key(self) < symbols_sort_key(other)
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:

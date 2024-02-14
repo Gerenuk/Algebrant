@@ -50,7 +50,7 @@ def deriv(term: Algebra | Number, param: str):
                             new_part = term._create({Symbols(frozenset(new_symbol_powers.items())): factor * power})
                             result_terms.append(new_part)
                         case _:
-                            pass
+                            raise ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
             case _:
                 raise ValueError(f"Unknown basis type {type(basis)} with value {basis}")
 

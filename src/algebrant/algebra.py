@@ -1,7 +1,6 @@
 import itertools
 import numbers
 from math import prod
-from operator import itemgetter
 from typing import Any
 
 from .base_classes import BaseBasis
@@ -154,7 +153,7 @@ class Module(ArithmeticMixin):
 
         return other
 
-    def __add__(self, other: "Module" | Factor) -> "Module":
+    def __add__(self, other) -> "Module":
         if other == 0:
             return self
 
@@ -176,7 +175,7 @@ class Module(ArithmeticMixin):
 
         return self._create(basis_factor)
 
-    def __radd__(self, other: "Module" | Factor) -> "Module":
+    def __radd__(self, other) -> "Module":
         return self + other
 
     def __mul__(self, other: Factor) -> "Module":
@@ -203,7 +202,7 @@ class Module(ArithmeticMixin):
     def __neg__(self):
         return self._create({basis: -factor for basis, factor in self.basis_factor.items()})
 
-    def __eq__(self, other: "Module" | Factor):
+    def __eq__(self, other):
         if other == 0:
             return not self.basis_factor
 
@@ -261,10 +260,6 @@ class Module(ArithmeticMixin):
 
         multi_line = support_newlines and len(self.basis_factor) > 1 and _is_long_repr(self.basis_factor)
 
-        # print(f"{multi_line=} {support_newlines=} {len(self.basis_factor)=} {_is_long_repr(self.basis_factor)=}")
-
-        # idx_last_basis_factor = len(self.basis_factor) - 1
-
         for i, (basis, factor) in enumerate(
             sorted(self.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())
         ):  # assumes basis has __lt__
@@ -295,24 +290,13 @@ class Module(ArithmeticMixin):
 
             factor_needs_parenthesis = do_print_factor and _repr_needs_parenthesis(factor)
 
-            # from .nc_symbols import NCSymbols
-
-            # if isinstance(basis, NCSymbols):
-            # print(f"{do_print_factor=} {factor_needs_parenthesis=} {basis=} {factor=} {basis.is_unity()=}")
-
             if factor_needs_parenthesis:
-                # printer.text("(")
-                import pdb
-
-                # pdb.set_trace()
-
                 printer.begin_group(1, "(")
 
             if do_print_factor:
                 printer.pretty(factor)
 
             if factor_needs_parenthesis:
-                # printer.text(")")
                 printer.end_group(1, ")")
 
             if not basis.is_unity():
@@ -327,7 +311,6 @@ class Module(ArithmeticMixin):
     def __repr__(self):
         printer = ReprPrinter()
         self._repr_pretty_(printer, cycle=False, support_newlines=False)
-        # return "{" + printer.value() + f";p{self.op_prio}}}"
         return "{ " + printer.value() + " }"
 
     @property
@@ -356,13 +339,15 @@ class Module(ArithmeticMixin):
 
 
 def _repr_needs_parenthesis(factor):
-    if isinstance(factor, numbers.Complex):
-        return factor.real != 0 and factor.imag != 0
+    # if isinstance(factor, numbers.Complex):
+    #    return factor.real != 0 and factor.imag != 0
 
     if isinstance(factor, Module):
-        return len(factor.basis_factor) > 1
+        return len(factor.basis_factor) > 1  # or (
+        #    len(factor.basis_factor) == 1 and _repr_needs_parenthesis(next(iter(factor.basis_factor.values())))
+        # )
 
-    return True
+    return False
 
 
 def _is_long_repr(basis_factor):

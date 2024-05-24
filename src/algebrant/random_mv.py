@@ -24,9 +24,9 @@ def random_vec(*grades, dim=None, complex=True, int_only=False):
 def random_coef(dim, *, complex=True, int_only=False, min_int=2, max_int=1000):
     match complex, int_only:
         case True, True:
-            result = np.random.choice([1, -1], size=dim) * np.random.randint(min_int, max_int) + 1j * np.random.choice(
-                [1, -1], size=dim
-            ) * np.random.randint(min_int, max_int)
+            result = np.random.choice([1, -1], size=dim) * np.random.randint(
+                min_int, max_int, size=dim
+            ) + 1j * np.random.choice([1, -1], size=dim) * np.random.randint(min_int, max_int, size=dim)
 
         case True, False:
             result = np.random.normal(size=dim) + 1j * np.random.normal(size=dim)

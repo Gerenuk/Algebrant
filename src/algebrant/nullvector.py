@@ -1,5 +1,3 @@
-import itertools
-import math
 from dataclasses import dataclass
 from itertools import groupby
 from operator import attrgetter
@@ -64,10 +62,13 @@ class NullVectorSymbols(NCSymbols):
     includes order normalization
     """
 
+    def __post_init__(self):
+        assert _validate_basis_symbols(self.symbols), self.symbols
+
     def conjugate(self, factor):
         reversed_symbols, factor_sign = _reverse_symbols(self.symbols)
 
-        return self._create(tuple(sym.conjugate() for sym in reversed_symbols)), factor_sign * factor.conjugate()
+        return self._create(tuple(sym.conjugate() for sym in reversed_symbols)), factor.conjugate() * factor_sign
 
     def r(self, factor):
         """
@@ -75,7 +76,7 @@ class NullVectorSymbols(NCSymbols):
         """
         reversed_symbols, factor_sign = _reverse_symbols(self.symbols)
 
-        return self._create(reversed_symbols), factor_sign * factor
+        return self._create(reversed_symbols), factor * factor_sign
 
     def cl(self, factor):
         """
@@ -104,7 +105,7 @@ class NullVectorSymbols(NCSymbols):
 
         reorder_factor = 1
 
-        # Alphabetic order
+        # Alphabetic order; merge-sort like
         while 1:
             try:  # get next self
                 if self_name is None:
@@ -114,7 +115,6 @@ class NullVectorSymbols(NCSymbols):
 
                     assert len(self_symbols) <= 2, self_symbols
             except StopIteration:
-                # print("Stop self")
                 if other_name is not None:
                     name_ordered.extend(other_symbols)
 
@@ -129,15 +129,12 @@ class NullVectorSymbols(NCSymbols):
 
                     assert len(other_symbols) <= 2, other_symbols
             except StopIteration:
-                # print("Stop other")
                 if self_name is not None:
                     name_ordered.extend(self_symbols)
 
                 for _name, gr in self_groups:
                     name_ordered.extend(gr)
                 break
-
-            # print(f"{self_name=} {self_symbols=} {other_name=} {other_symbols}")
 
             #####################
             if self_name < other_name:
@@ -149,7 +146,6 @@ class NullVectorSymbols(NCSymbols):
 
                 other_name = None
 
-                # print(f"{len(other_symbols)=} {remaining_self=} {len(self_symbols)=}")
                 if len(other_symbols) % 2 == 1 and (remaining_self + len(self_symbols)) % 2 == 1:
                     reorder_factor = -reorder_factor
             else:  # equal names
@@ -157,8 +153,6 @@ class NullVectorSymbols(NCSymbols):
                     return {}  # *** Return Zero
 
                 both_symbols = self_symbols + other_symbols
-
-                # print(f"{both_symbols=}")
 
                 while len(both_symbols) >= 3 and (  # Combine A* A A* or A A* A
                     both_symbols[0].is_conjugate == (not both_symbols[1].is_conjugate) == both_symbols[2].is_conjugate
@@ -172,8 +166,6 @@ class NullVectorSymbols(NCSymbols):
 
                 if len(other_symbols) % 2 == 1 and remaining_self % 2 == 1:
                     reorder_factor = -reorder_factor
-
-        assert (names := [symbol.name for symbol in name_ordered]) == sorted(names), name_ordered
 
         ## Normal order
         # factors = []
@@ -210,10 +202,13 @@ class NullVectorSymbols(NCSymbols):
         #     else:
         #         result[basis] = total_factor
 
-        result = {self._create(tuple(name_ordered)): reorder_factor}
+        assert _validate_basis_symbols(name_ordered), name_ordered
 
-        return result
+        new_basis = self._create(tuple(name_ordered))
 
-    def _validated_basis(self):
-        # return list(self.symbols) == sorted(self.symbols, key=lambda s: (s.name, not s.is_conjugate))  # if normal order
-        return list(self.symbols) == sorted(self.symbols, key=lambda s: s.name)
+        return {new_basis: reorder_factor}
+
+
+def _validate_basis_symbols(symbols):
+    # return list(self.symbols) == sorted(self.symbols, key=lambda s: (s.name, not s.is_conjugate))  # if normal order
+    return list(symbols) == sorted(symbols, key=lambda s: s.name)

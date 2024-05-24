@@ -20,7 +20,7 @@ def deriv(term: Algebra | Number, param: str):
     for basis, factor in term.basis_factor.items():
         match basis:
             case CliffordBasis():
-                new_part = term._create({basis: deriv(param, factor)})
+                new_part = term._create({basis: deriv(factor, param)})
                 result_terms.append(new_part)  # derivative of factor only
             case Symbols():
                 symbol_powers = list(basis.symbol_powers)
@@ -50,7 +50,7 @@ def deriv(term: Algebra | Number, param: str):
                             new_part = term._create({Symbols(frozenset(new_symbol_powers.items())): factor * power})
                             result_terms.append(new_part)
                         case _:
-                            raise ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
+                            pass  # other symbol
             case _:
                 raise ValueError(f"Unknown basis type {type(basis)} with value {basis}")
 

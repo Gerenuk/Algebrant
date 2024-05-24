@@ -21,7 +21,17 @@ def is_identity(val):
         return False
 
 
+def scalar_part(val):
+    if hasattr(val, "scalar_part"):
+        return val.scalar_part
+
+    return val
+
+
 def conjugate(val):
+    if isinstance(val, np.ndarray):
+        return val.T.conjugate()
+
     if hasattr(val, "conjugate"):
         return val.conjugate()
 

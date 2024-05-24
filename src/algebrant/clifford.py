@@ -400,7 +400,7 @@ class CliffordAlgebra(Algebra):
 def ga_basis_mul(basis1, basis2):
     """
     Clifford algebra product of basis vectors
-    basis1, basis2: sorted list of integers of grade-1 vectors; e.g. "e124" = (1,2,4) or ("e1", "e2", "e4")
+    basis1, basis2: sorted list of elements of grade-1 vectors; e.g. "e124" = (1,2,4) or ("e1", "e2", "e4")
     :return: (tuple of basis indices, is_negative); scalar
 
     Does not do negative signature

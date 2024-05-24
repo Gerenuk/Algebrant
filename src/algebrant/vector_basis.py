@@ -1,128 +1,75 @@
-import itertools
-
 import numpy as np
-
-from .format_number import format_vec_coef
 
 
 class VecBasis:
-    def __init__(self, basis_vecs, dot):
-        """
-        expects orthogonal basis_vecs wrt dot product
-        """
-        # check orthogonality
-        self.dot = dot
-
-        for (i_a, a), (i_b, b) in itertools.combinations(enumerate(basis_vecs), 2):
-            prod = self.dot(a, b)
-            if prod != 0:
-                raise ValueError(
-                    f"""Non-orthogonal elements:
-vec[{i_a:2}] = {a}
-vec[{i_b:2}] = {b}
-dot     = {prod}
-"""
-                )
-
+    def __init__(self, basis_vecs, *, dot):
         self.basis_vecs = basis_vecs
-        self.scalings = [self.dot(a, a) for a in basis_vecs]
+        self.dot = dot
+        self.dim = len(basis_vecs)
 
-        if any(s == 0 for s in self.scalings):
-            zero_scaling_vectors = [v for s, v in zip(self.scalings, self.basis_vecs) if s == 0]
-            raise ValueError(f"Zero length for vectors: {zero_scaling_vectors}")
+        trans = np.array([[dot(b2, b1) for b2 in basis_vecs] for b1 in basis_vecs])
+
+        rank = np.linalg.matrix_rank(trans)
+        if rank != trans.shape[0]:
+            raise ValueError(f"Basis is rank-deficient: {rank} < {len(basis_vecs)}")
+
+        self.inv_trans = np.linalg.inv(trans)
+
+    def to_coef(self, elem, verify=True):
+        vec = np.array([self.dot(b, elem) for b in self.basis_vecs])
+        coefs = self.inv_trans @ vec
+
+        if verify:
+            elem_from_coef = self.to_vec(coefs)
+            if isinstance(elem, np.ndarray):
+                is_equal = np.all(np.isclose(elem_from_coef, elem))
+            else:
+                is_equal = elem_from_coef == elem
+
+            # TODO: use (vector) norm instead (for imprecise comparison)
+
+            if not is_equal:
+                raise ValueError(f"Missing basis {elem - elem_from_coef}")
+
+        return coefs
+
+    def to_vec(self, coefs):
+        if len(coefs) != len(self.basis_vecs):
+            raise ValueError(
+                f"Number of coefficients {len(coefs)} does not equal dimension of basis {len(self.basis_vecs)}"
+            )
+
+        return sum(coef * b for coef, b in zip(coefs, self.basis_vecs))
 
     def __repr__(self):
-        return f"Basis({len(self.basis_vecs)} dim.)"
+        return f"VecBasis(dim={self.dim})"
 
     def __iter__(self):
         return iter(self.basis_vecs)
 
-    def to_vec(self, elem, verify_complete=True):
-        """
-        returns as components in basis
-        """
-        result = []
-        for basis, scaling in zip(self.basis_vecs, self.scalings):
-            result.append(self.dot(basis, elem) / scaling)
 
-        if verify_complete:
-            self._verify_equal(elem, result)  # only when __eq__ yields boolean
+class ConvertVecBasis:
+    def __init__(self, vec_basis_list, names):
+        dims = set(v.dim for v in vec_basis_list)
+        if len(dims) != 1:
+            raise ValueError(f"Inconsistent dimensions {[v.dim for v in vec_basis_list]}")
 
-        return np.array(result)
-
-    def to_elem(self, vec):
-        if not len(vec) == len(self.basis_vecs):
-            raise ValueError(f"Incorrect vector length: expected {len(self.basis_vecs)}, received {len(vec)}")
-
-        return sum(coef * base for coef, base in zip(vec, self.basis_vecs))
-
-    def matrix(self, func):
-        """
-        Matrix elements assuming func is linear
-        """
-        result = []
-
-        for basis_vec in self.basis_vecs:
-            result.append(self.to_vec(func(basis_vec)))
-
-        return np.array(result).T
-
-    def _verify_equal(self, vec, coefs):
-        result_vec = sum([coef * base for coef, base in zip(coefs, self.basis_vecs)])
-
-        if isinstance(result_vec, np.ndarray):
-            if np.issubdtype(result_vec.dtype, np.number):
-                compare = np.all(np.isclose(result_vec, vec))
-            else:
-                compare = np.all(result_vec == vec)
-        else:
-            compare = result_vec == vec  # TODO: tolerant small deviations? use abs()?
-
-        if not compare:
-            error = " +\n".join(f"{coef} * {basis}" for coef, basis in zip(coefs, self.basis_vecs) if coef != 0)
-
-            raise ValueError(
-                f"""Base insufficient:
-Result:   {result_vec}
-
-Original: {vec}
-
-Diff.:    {result_vec - vec}
-
-Error.:    {error}
-"""
-            )
-
-    def new_basis_matrix(self, new_basis):
-        """
-        use to_vec(x) @ new_basis_matrix(new_basis) to transform to new basis
-        """
-        return np.linalg.inv(np.array([self.to_vec(b) for b in new_basis]))
-
-    def trace(self, func):
-        result = 0
-
-        for basis_vec in self.basis_vecs:
-            result += self.dot(basis_vec, func(basis_vec))
-
-        return result
-
-
-class VecText:
-    def __init__(self, names) -> None:
+        self.dim = vec_basis_list[0].dim
         self.names = names
+        self.vec_basis_list = vec_basis_list
 
-    def to_names(self, vec):
-        if len(vec) != len(self.names):
-            raise ValueError(f"Vector has {len(vec)} elements, but expected {len(self.names)}: {vec}")
+    def __call__(self, elem, name_from, name_to, verify=True):
+        if name_from != "v":
+            coefs = self.vec_basis_list[self.names.index(name_from)].to_coef(elem, verify=verify)
+        else:
+            coefs = elem
 
-        return {name: coef for name, coef in zip(self.names, vec) if coef != 0}
+        if name_to != "v":
+            result = self.vec_basis_list[self.names.index(name_to)].to_vec(coefs)
+        else:
+            result = coefs
 
-    def to_vec(self, names):
-        result = np.zeros(len(self.names))
-        for name, val in names.items():
-            result[self.names.index(name)] = val
         return result
 
-    def to_str(self, vec):
-        return " + ".join(f"{format_vec_coef(coef)}{name}" for name, coef in self(vec).items())
+    def __repr__(self):
+        return f"ConvertVecBasis({self.names}, dim={self.dim})"

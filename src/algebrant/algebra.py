@@ -22,21 +22,33 @@ Note:
 Factor = Any
 
 
+def first_factor(expr):
+    if isinstance(expr, Algebra):
+        if not expr.basis_factor:
+            return 0
+
+        _expr_first_basis, expr_first_factor = sorted(expr.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())[0]
+        factor = first_factor(expr_first_factor)
+
+        return factor
+
+    return expr
+
+
 def is_negative(val):
     """
     used to determine whether to translate "... + -a" into "... - a"
     """
-    return (
-        (isinstance(val, numbers.Real) and val < 0)
-        or (isinstance(val, numbers.Complex) and (val.real < 0 or (val.real == 0 and val.imag < 0)))
-        or (
-            isinstance(val, Algebra)
-            and val.basis_factor
-            and is_negative(
-                sorted(val.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())[0][1]
-            )  # factor of first-to-display element
-        )
-    )
+    if isinstance(val, numbers.Real):
+        return val < 0
+
+    if isinstance(val, numbers.Complex):
+        return val.real < 0 or (val.real == 0 and val.imag < 0)
+
+    if isinstance(val, Algebra):
+        return is_negative(first_factor(val))
+
+    raise ValueError(f"Unknown type {type(val)} for is_negative")
 
 
 class ArithmeticMixin:

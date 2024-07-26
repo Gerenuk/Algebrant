@@ -53,7 +53,7 @@ def make_mv_vec_basis(dim, start_idx=1):
     )
 
 
-def make_cl_vec_basis(vec_mats):
+def make_mat_gen_vec_basis(vec_mats):
     clifford_dim = len(vec_mats)
 
     mat_dim = vec_mats[0].shape[0]
@@ -73,6 +73,27 @@ def make_cl_vec_basis(vec_mats):
 
 def make_convert_vec(vec_mats):
     c_basis = make_mv_vec_basis(len(vec_mats))
-    m_basis = make_cl_vec_basis(vec_mats)
+    m_basis = make_mat_gen_vec_basis(vec_mats)
 
     return ConvertVecBasis([c_basis, m_basis], ["c", "m"])
+
+
+class ClMat:
+    def __init__(self, vec_mats):
+        self.convert = make_convert_vec(vec_mats)
+
+    def to_mat(self, elem):
+        return self.convert(elem, "c", "m")
+
+    def to_cl(self, elem):
+        return self.convert(elem, "m", "c")
+
+    @classmethod
+    def from_dim(cls, dim):
+        mats = make_cl_mat_basis(dim)
+        return cls(mats)
+
+    @classmethod
+    def chiral(cls):
+        mats = list(map(np.matrix, make_mat_basis_from_pauli([(3, 0), (2, 1), (2, 2), (2, 3)])))
+        return cls(mats)

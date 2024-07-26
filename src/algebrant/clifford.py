@@ -211,9 +211,6 @@ class CliffordAlgebra(Algebra):
         return self._create(basis_factor)
 
     def __rtruediv__(self, numer):
-        """
-        guaranteed to work only up to dimension 5 or special grade cases
-        """
 
         # TODO: rule for algebra split
         # e.g. split into A(1+I)+B(1-I) or A(1+iI)+B(1-iI) and I is product of all bases
@@ -227,14 +224,7 @@ class CliffordAlgebra(Algebra):
         # TODO:
         # special rule for when there is no scalar (extract lowest grade having frequent basis?)
 
-        # TODO: Advanced sign-flip:
-        # split blades into groups A, B such that within group A/B all anti-commute and across groups A to B all commute
-        # -> flip sign of 1 group
-        # (!) but no gain if scalar is present
-
         # TODO: speed up A*A.r case by exploiting the cancellation structure
-
-        # dim>=6 you cannot generally solves grades {0,3,4}
 
         if not self.basis_factor:
             raise ZeroDivisionError("Division by Multivector zero")
@@ -300,25 +290,25 @@ class CliffordAlgebra(Algebra):
         #################################### test if grades 4k+{1,2} which I could reduce; only for dimension >= 6
         grades_mod_4 = Counter(g % 4 for g in self.grades)
 
-        if dimension >= 6 and grades_mod_4[1] > grades_mod_4[3]:
-            # print("Clifford reverse")
-            new_inverse = self * self.c
+        # if dimension >= 6 and grades_mod_4[1] > grades_mod_4[3]:
+        #     # print("Clifford reverse")
+        #     new_inverse = self * self.c
 
-            assert not any(
-                g % 4 in (1, 2) for g in new_inverse.grades
-            ), f"Grades 1,2 did not reduce with result {new_inverse} (should not happen unless due to floating point uncertainty)"
+        #     assert not any(
+        #         g % 4 in (1, 2) for g in new_inverse.grades
+        #     ), f"Grades 1,2 did not reduce with result {new_inverse} (should not happen unless due to floating point uncertainty)"
 
-            if new_inverse == 0:
-                raise ZeroDivisionError(f"Zero division 1/(A*A.c) for {self}")
+        #     if new_inverse == 0:
+        #         raise ZeroDivisionError(f"Zero division 1/(A*A.c) for {self}")
 
-            if new_inverse.grades == {0}:
-                new_inverse = new_inverse.scalar_part
+        #     if new_inverse.grades == {0}:
+        #         new_inverse = new_inverse.scalar_part
 
-            if all(g % 4 != 3 for g in new_inverse.grades):  # otherwise may be infinite loop with 4k+{2,3} rule
-                return numer * self.c * (1 / new_inverse)
+        #     if all(g % 4 != 3 for g in new_inverse.grades):  # otherwise may be infinite loop with 4k+{2,3} rule
+        #         return numer * self.c * (1 / new_inverse)
 
         #################################### test if grades 4k+{2,3} which I could reduce
-        if grades_mod_4.keys() & {2, 3}:
+        if dimension <= 5 and grades_mod_4.keys() & {2, 3}:
             # print("Reverse")
             new_inverse = self * self.r
 
@@ -334,7 +324,22 @@ class CliffordAlgebra(Algebra):
 
             return numer * self.r * (1 / new_inverse)
 
-        raise NotImplementedError(f"Cannot divide by multivector with grades {self.grades}: {self} ")
+        ################################# the following works generally
+        # but may require more steps
+        max_steps = 2 ** math.floor((dimension + 1) / 2)
+        inv = self
+        for i in range(1, max_steps + 1):
+            A = inv - max_steps * inv.scalar_part / i
+            inv = self * A  # will clip small coefficients
+            if inv.grades <= {0}:
+                break
+
+        if inv == 0:
+            raise ZeroDivisionError("Division by zero in general algorithm")
+
+        return A / inv
+
+        # raise NotImplementedError(f"Cannot divide by multivector with grades {self.grades}: {self} ")
 
     def __rmatmul__(self, other):
         result = (conjugate(other) * self).scalar_part

@@ -6,10 +6,12 @@ Assumes denominator is commutative
 Currently quite rudimentary and mainly only for reporting quotient results
 
 TODO:
+* Cl / Cl makes numer {1:Cl} instead of spreading
 * implement addition (with quotient or anything else)
 * implement cancel Basis
 * implement __eq__, __add__, __sub__, __rtruediv__
 * simplification when scalars involved
+* A/A -> 1
 """
 
 
@@ -43,6 +45,7 @@ class Quotient:
             return NotImplemented
 
         new_numer = other * self.numer
+
         if new_numer == self.denom:
             return 1
 
@@ -60,6 +63,9 @@ class Quotient:
     def __eq__(self, other):
         if other == 0:
             return self.numer == 0
+
+        if isinstance(other, Quotient):
+            return self.numer * other.denom == other.numer * self.denom
 
         raise NotImplementedError("Equality not implemented")
 

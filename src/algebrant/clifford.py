@@ -339,7 +339,7 @@ class CliffordAlgebra(Algebra):
         if inv == 0:
             raise ZeroDivisionError("Division by zero in general algorithm")
 
-        return A / inv
+        return A / inv.scalar_part
 
         # raise NotImplementedError(f"Cannot divide by multivector with grades {self.grades}: {self} ")
 

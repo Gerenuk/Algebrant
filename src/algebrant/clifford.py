@@ -333,6 +333,8 @@ class CliffordAlgebra(Algebra):
             inv = self * A  # will clip small coefficients
             if inv.grades <= {0}:
                 break
+        else:
+            raise NotImplementedError(f"Iterations of general inversion algorithm failed with {i=} {inv=} {A=}")
 
         if inv == 0:
             raise ZeroDivisionError("Division by zero in general algorithm")

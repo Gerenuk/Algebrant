@@ -1,3 +1,4 @@
+import re
 import sys
 from itertools import combinations
 
@@ -49,7 +50,19 @@ def E(*bases: str | int):
     """
     will always be deduplicated and sorted
     """
-    basis = CliffordBasis(tuple(sorted(sys.intern(f"e{b}") if isinstance(b, int) else b for b in set(bases))))
+
+    # def sort(basis):
+    #     m = re.search(r"\d+$", basis)
+    #     if m:
+    #         number = int(m.group(0))
+    #     else:
+    #         number = float("inf")
+
+    #     return number, basis
+
+    bases = tuple(sys.intern(f"e{b}") if isinstance(b, int) else b for b in set(bases))
+    bases = sorted(bases)
+    basis = CliffordBasis(tuple(bases))
 
     return CliffordAlgebra(
         {basis: 1},

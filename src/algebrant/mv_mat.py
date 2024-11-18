@@ -1,11 +1,14 @@
 from functools import reduce
 from itertools import combinations
+from math import prod
 
 import numpy as np
 
+from algebrant.clifford import cl_dot
+
 from .common import conjugate, scalar_part
 from .creation import E
-from .vector_basis import ConvertVecBasis, VecBasis
+from .vector_basis import ConvertVecBasis, VecBasis, mat_dot
 
 Paulis = [
     np.array([[1, 0], [0, 1]]),  # identity
@@ -46,33 +49,38 @@ def make_cl_mat_basis(dim: int):
     return vec_mats
 
 
-def make_mv_vec_basis(dim, start_idx=1):
+def grade_1_to_all(es, *, create_func=prod):
+    return [create_func(grade_es) for grade in range(len(es) + 1) for grade_es in combinations(es, r=grade)]
+
+
+def make_mv_vec_basis_from_dim(dim, start_idx=1):
     return VecBasis(
-        [E(*idxs) for k in range(0, dim + 1) for idxs in combinations(range(start_idx, start_idx + dim), r=k)],
-        dot=lambda a, b: scalar_part(conjugate(a) * b),
+        grade_1_to_all(range(start_idx, start_idx + dim), create_func=lambda x: E(*x)),
+        dot=cl_dot,
+    )
+
+
+def make_mv_vec_basis_from_vec(basis_vecs):
+    return VecBasis(
+        grade_1_to_all(basis_vecs, create_func=lambda x: prod(x) if x else E()),
+        dot=cl_dot,
     )
 
 
 def make_mat_gen_vec_basis(vec_mats):
-    clifford_dim = len(vec_mats)
-
     mat_dim = vec_mats[0].shape[0]
+    identity = np.identity(mat_dim)
 
     mat_basis = VecBasis(
-        [np.matrix(np.identity(mat_dim))]
-        + [
-            reduce(np.dot, [vec_mats[i] for i in idxs])
-            for k in range(1, clifford_dim + 1)
-            for idxs in combinations(range(len(vec_mats)), r=k)
-        ],
-        dot=lambda a, b: np.trace(a.conj().T @ b),
+        grade_1_to_all(vec_mats, create_func=lambda mats: reduce(np.dot, mats) if mats else identity),
+        dot=mat_dot,
     )
 
     return mat_basis
 
 
 def make_convert_vec(vec_mats):
-    c_basis = make_mv_vec_basis(len(vec_mats))
+    c_basis = make_mv_vec_basis_from_dim(len(vec_mats))
     m_basis = make_mat_gen_vec_basis(vec_mats)
 
     return ConvertVecBasis([c_basis, m_basis], ["c", "m"])

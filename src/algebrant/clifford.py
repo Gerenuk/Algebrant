@@ -28,6 +28,12 @@ Todos (some old?):
 """
 
 
+def cl_dot(a, b):
+    factors_a = a.basis_factor
+    factors_b = b.basis_factor
+    return sum(conjugate(factors_a[basis]) * factors_b[basis] for basis in factors_a.keys() & factors_b.keys())
+
+
 def sqr_to_scalar(val: "CliffordAlgebra"):
     """
     Returns (scalar**2, non_scalar**2) but non_scalar only if it squares to a scalar
@@ -342,20 +348,6 @@ class CliffordAlgebra(Algebra):
         return A / inv.scalar_part
 
         # raise NotImplementedError(f"Cannot divide by multivector with grades {self.grades}: {self} ")
-
-    def __rmatmul__(self, other):
-        result = (conjugate(other) * self).scalar_part
-
-        return result
-
-    def __matmul__(self, other):
-        """
-        sesquilinear product (i.e. not symmetric)
-        swapping arguments takes complex conjugate
-        """
-        result = (self.c * other).scalar_part
-
-        return result
 
     def __abs__(self):
         abs_sqr = sum(scalar * conjugate(scalar) for _base, scalar in self)

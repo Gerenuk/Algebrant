@@ -11,7 +11,7 @@ def symbol_sort_key(symbol):
         case DerivSymbol(symbol, _, derivativates):
             key = (1, bool(derivativates), symbol.name)  # TODO: more specific order?
         case _:
-            return ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
+            raise ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
 
     return key
 

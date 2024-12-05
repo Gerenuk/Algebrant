@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod, abstractproperty
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
@@ -28,14 +28,17 @@ class BaseBasis(ABC):
         """
         used by Algebra multiplication and needed factor2 has no-trivial change when going through basis1
         """
+        assert isinstance(basis2, self.__class__), f"{type(self)=} {type(basis2)=}"
+
         prod_factor = factor1 * factor2
-        return {basis: prod_factor * factor for basis, factor in (self * basis2).items()}
+        return {basis: prod_factor * extra_factor for basis, extra_factor in (self * basis2).items()}
 
     @abstractmethod
     def conjugate(self, factor) -> tuple():  # needs this name because apparently someone checks for "conjugate" name
         raise NotImplementedError()
 
-    @abstractproperty
+    @property
+    @abstractmethod
     def scalar_part(self):
         raise NotImplementedError()
 

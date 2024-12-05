@@ -29,9 +29,16 @@ class NCSymbols(BaseBasis):
         return self.symbols == tuple()
 
     def _sort_key(self):
-        return (len(self.symbols), tuple(sym.name for sym in self.symbols))
+        names = tuple(sym.name for sym in self.symbols)
+
+        return (
+            len(names),
+            tuple(sorted(names)),
+            names,
+        )
 
     def __mul__(self, other: "NCSymbols") -> dict:
+        # new symbols properties based on left factor
         return {self._create(self.symbols + other.symbols): 1}
 
     def _repr_pretty_(self, printer, cycle):

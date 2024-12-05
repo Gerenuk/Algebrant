@@ -350,6 +350,7 @@ class CliffordAlgebra(Algebra):
         # raise NotImplementedError(f"Cannot divide by multivector with grades {self.grades}: {self} ")
 
     def __abs__(self):
+        # TODO: rather use inner product
         abs_sqr = sum(scalar * conjugate(scalar) for _base, scalar in self)
 
         if isinstance(abs_sqr, (complex, np.complex_)):

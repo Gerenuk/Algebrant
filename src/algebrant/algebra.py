@@ -393,15 +393,19 @@ class Algebra(Module):
         for (basis1, factor1), (basis2, factor2) in itertools.product(
             self.basis_factor.items(), other_wrapped.basis_factor.items()
         ):
-            new_basis_factor = basis1.mul(factor1, basis2, factor2)
+            #####
+            new_basis_factors = basis1.mul(factor1, basis2, factor2)
+            #####
 
-            for result_basis, result_factor in new_basis_factor.items():
+            for result_basis, result_factor in new_basis_factors.items():
                 if result_basis not in basis_factor:
                     basis_factor[result_basis] = result_factor
                 else:
                     basis_factor[result_basis] += result_factor
 
-        return self._create(basis_factor)
+        result = self._create(basis_factor)
+
+        return result
 
     def __rtruediv__(self, numer):
         """

@@ -31,7 +31,7 @@ def S(name: str, *, power: int = 1):
     return SymbolAlgebra(
         {Symbols(frozenset(((Symbol(name), power),))): 1},
         op_prio=SYMBOL_OP_PRIO,
-        unity_basis=Symbols.unity(),
+        basis_class=Symbols,
     )
 
 
@@ -42,7 +42,7 @@ def Snc(*names: str):
     return Algebra(
         {NCSymbols(tuple(Symbol(name) for name in names)): 1},
         op_prio=NC_SYMBOL_OP_PRIO,
-        unity_basis=NCSymbols.unity(),
+        basis_class=NCSymbols,
     )
 
 
@@ -67,7 +67,7 @@ def E(*bases: str | int):
     return CliffordAlgebra(
         {basis: 1},
         op_prio=CLIFFORD_OP_PRIO,
-        unity_basis=CliffordBasis.unity(),
+        basis_class=CliffordBasis,
     )
 
 
@@ -91,7 +91,7 @@ def Func(name: str, parameters: tuple[str] = tuple(), *, deriv: dict[str, int] =
             ): 1
         },
         op_prio=SYMBOL_OP_PRIO,
-        unity_basis=Symbols.unity(),
+        basis_class=Symbols,
     )
 
 
@@ -99,7 +99,7 @@ def NV(name):
     return NullVectorAlgebra(
         {NullVectorSymbols((NullVector(name, color=NULLVECTOR_COLOR),)): 1},
         op_prio=NULLVECTOR_OP_PRIO,
-        unity_basis=NullVectorSymbols.unity(),
+        basis_class=NullVectorSymbols,
     )
 
 

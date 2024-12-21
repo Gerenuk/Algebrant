@@ -94,11 +94,15 @@ class Module(ArithmeticMixin):
     """
 
     def __init__(
-        self, basis_factor: dict[BaseBasis, Any], *, unity_basis, op_prio, normalize=None, clip_small=1e-10
+        self, basis_factor: dict[BaseBasis, Any], *, basis_class, op_prio, normalize=None, clip_small=1e-10
     ) -> None:
         """
         op_prio: low is highest prio; less prio will pass operation to more prio
         """
+        for key, _val in basis_factor.items():
+            if key.__class__ != basis_class:
+                raise ValueError(f"One basis class in basis_factor is {key.__class__}, but should be {basis_class}")
+
         if clip_small is not None:
             max_factor = max(  # determine max. absolute value of factors in order to potential clip small values
                 [
@@ -127,7 +131,8 @@ class Module(ArithmeticMixin):
 
         self.basis_factor = normalize(basis_factor) if normalize else basis_factor
         self.normalize = normalize
-        self.unity_basis = unity_basis
+        self.basis_class = basis_class
+        self.unity_basis = basis_class.unity()
         self.op_prio = op_prio
         self.clip_small = clip_small
 
@@ -140,7 +145,7 @@ class Module(ArithmeticMixin):
         """
         return self.__class__(
             basis_factor,
-            unity_basis=self.unity_basis,
+            basis_class=self.basis_class,
             op_prio=self.op_prio,
             normalize=self.normalize,
             clip_small=self.clip_small,
@@ -154,16 +159,18 @@ class Module(ArithmeticMixin):
         less prio Module are rejected
         more prio
         """
-        do_take_operation = isinstance(other, numbers.Number) or (  # TODO: sometimes no sides wants the operation?
-            hasattr(other, "op_prio") and other.op_prio >= self.op_prio
-        )
-        if not do_take_operation:
-            return NotImplemented
+        if isinstance(other, numbers.Number) or (hasattr(other, "op_prio") and other.op_prio > self.op_prio):
+            return self._unity(other)
 
-        if not isinstance(other, self.__class__) or self.op_prio != other.op_prio:
-            other = self._unity(other)
+        if isinstance(other, Module) and other.op_prio == self.op_prio:
+            if self.basis_class == other.basis_class:
+                return other
+            else:
+                raise ValueError(
+                    f"Same op_prio={self.op_prio}, but different basis_class {self.basis_class}!={other.basis_class}."
+                )
 
-        return other
+        return NotImplemented
 
     def __add__(self, other) -> "Module":
         if other == 0:
@@ -329,7 +336,7 @@ class Module(ArithmeticMixin):
     def c(self):
         return self.conjugate()
 
-    def linear_func(self, func_name):
+    def linear_func(self, func_name: str):
         return self._create(
             {
                 # fmt: off
@@ -377,11 +384,7 @@ class Algebra(Module):
     in multiplication only use Factor or Algebra; never a basis
     """
 
-    def __mul__(self, other: "Algebra") -> "Algebra":
-        """
-        __rmul__ not needed since Algebra*Algebra
-        or multiplied from the right?
-        """
+    def _mul(self, other, basis_mul):
         other_wrapped = self._ensure_prio(other)
 
         if other_wrapped is NotImplemented:
@@ -394,7 +397,7 @@ class Algebra(Module):
             self.basis_factor.items(), other_wrapped.basis_factor.items()
         ):
             #####
-            new_basis_factors = basis1.mul(factor1, basis2, factor2)
+            new_basis_factors = basis_mul(basis1, factor1, basis2, factor2)
             #####
 
             for result_basis, result_factor in new_basis_factors.items():
@@ -406,6 +409,13 @@ class Algebra(Module):
         result = self._create(basis_factor)
 
         return result
+
+    def __mul__(self, other: "Algebra") -> "Algebra":
+        """
+        __rmul__ not needed since Algebra*Algebra
+        or multiplied from the right?
+        """
+        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2))
 
     def __rtruediv__(self, numer):
         """

@@ -87,15 +87,6 @@ class CliffordBasis(BaseBasis):
 
         return {CliffordBasis(tuple(result_bases)): 1 if not is_negative else -1}
 
-    def __xor__(self, other: "CliffordBasis") -> dict:
-        """
-        Wedge product
-        """
-        if set(self.bases) & set(other.bases):  # same as normal product unless some vectors in common
-            return {}
-
-        return self * other
-
     def _repr_pretty_(self, printer, cycle):
         if cycle:
             return printer.text("...")
@@ -353,34 +344,33 @@ class CliffordAlgebra(Algebra):
         # TODO: rather use inner product
         abs_sqr = sum(scalar * conjugate(scalar) for _base, scalar in self)
 
-        if isinstance(abs_sqr, (complex, np.complex_)):
+        if isinstance(abs_sqr, complex) or np.iscomplexobj(abs_sqr):
             assert abs_sqr == 0 or abs_sqr.imag < abs(abs_sqr) * 1e-10, abs_sqr  # TODO: not hard-code?
 
             abs_sqr = abs_sqr.real  # since should always be real
 
         return math.sqrt(abs_sqr)
 
-    def __xor__(self, other):
+    def __xor__(self, other: "Algebra") -> "Algebra":
         """
-        assumes other is cliffordalgebra
+        __rmul__ not needed since Algebra*Algebra
+        or multiplied from the right?
         """
-        other = self._ensure_prio(other)
+        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2) if not set(b1.bases) & set(b2.bases) else {})
 
-        if other is NotImplemented:
-            return NotImplemented
+    def __lshift__(self, other: "Algebra") -> "Algebra":
+        """
+        __rmul__ not needed since Algebra*Algebra
+        or multiplied from the right?
+        """
+        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2) if set(b1.bases) <= set(b2.bases) else {})
 
-        basis_factor = {}
-        for (basis1, factor1), (basis2, factor2) in itertools.product(
-            self.basis_factor.items(), other.basis_factor.items()
-        ):
-            new_elem = factor1 * factor2 * self._create(basis1 ^ basis2)  # only change compared to __mul__
-            for result_basis, result_factor in new_elem.basis_factor.items():
-                if result_basis not in basis_factor:
-                    basis_factor[result_basis] = result_factor
-                else:
-                    basis_factor[result_basis] += result_factor
-
-        return self._create(basis_factor)
+    def __rshift__(self, other: "Algebra") -> "Algebra":
+        """
+        __rmul__ not needed since Algebra*Algebra
+        or multiplied from the right?
+        """
+        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2) if set(b1.bases) >= set(b2.bases) else {})
 
     def take_grades(self, *grades):
         if grades and isinstance(grades[0], types.FunctionType):

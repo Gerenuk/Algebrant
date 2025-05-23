@@ -5,8 +5,8 @@ from itertools import combinations
 import colorful
 
 from .algebra import Algebra
-from .clifford import CliffordAlgebra, CliffordBasis
-from .deriv_symbol import DerivSymbol
+from .clifford.clifford import CliffordAlgebra, CliffordBasis
+from .derivative.deriv_symbol import DerivSymbol
 from .nc_symbols import NCSymbols
 from .nullvector import NullVector, NullVectorAlgebra, NullVectorSymbols
 from .symbol import Symbol
@@ -27,15 +27,15 @@ SYMBOL_OP_PRIO = 2
 NULLVECTOR_COLOR = colorful.hotPink
 
 
-def S(name: str, *, power: int = 1):
+def sym(name: str, *, power: int = 1):
     return SymbolAlgebra(
-        {Symbols(frozenset(((Symbol(name), power),))): 1},
+        {Symbols({Symbol(name): power}): 1},
         op_prio=SYMBOL_OP_PRIO,
         basis_class=Symbols,
     )
 
 
-def Snc(*names: str):
+def sym_nc(*names: str):
     if not all(names):
         raise ValueError(f"Empty name in {names}")
 
@@ -116,4 +116,8 @@ def make_grades(*grades: int, dim: int = None, name: str = "A"):
     if dim is None:
         dim = max(grades)
 
-    return sum(S(f"{name}{''.join(map(str,t))}") * E(*t) for g in grades for t in combinations(range(1, dim + 1), r=g))
+    return sum(
+        sym(f"{name}{''.join(map(str, t))}") * E(*t)
+        for g in grades
+        for t in combinations(range(1, dim + 1), r=g)
+    )

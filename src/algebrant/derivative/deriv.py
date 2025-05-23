@@ -1,11 +1,11 @@
 from collections import Counter
 from numbers import Number
 
-from .algebra import Algebra
-from .clifford import CliffordBasis
+from ..algebra import Algebra
+from ..clifford.clifford import CliffordBasis
 from .deriv_symbol import DerivSymbol
 from .symbol import Symbol
-from .symbols import Symbols
+from ..symbols import Symbols
 
 
 def deriv(term: Algebra | Number, param: str):
@@ -20,7 +20,7 @@ def deriv(term: Algebra | Number, param: str):
     for basis, factor in term.basis_factor.items():
         match basis:
             case CliffordBasis():
-                new_part = term._create({basis: deriv(factor, param)})
+                new_part = term._new({basis: deriv(factor, param)})
                 result_terms.append(new_part)  # derivative of factor only
             case Symbols():
                 symbol_powers = list(basis.symbol_powers)
@@ -29,25 +29,43 @@ def deriv(term: Algebra | Number, param: str):
 
                     match symbol:
                         case Symbol(name) if name == param:
-                            new_symbol_powers = symbol_powers[:i] + [(symbol, power - 1)] + symbol_powers[i + 1 :]
-                            new_part = term._create({Symbols(new_symbol_powers): factor * power})
+                            new_symbol_powers = (
+                                symbol_powers[:i]
+                                + [(symbol, power - 1)]
+                                + symbol_powers[i + 1 :]
+                            )
+                            new_part = term._new(
+                                {Symbols(new_symbol_powers): factor * power}
+                            )
                             result_terms.append(new_part)
-                        case DerivSymbol(
-                            deriv_symbol, parameters, derivatives
-                        ) if not parameters or param in parameters:
+                        case DerivSymbol(deriv_symbol, parameters, derivatives) if (
+                            not parameters or param in parameters
+                        ):
                             new_derivatives = Counter(dict(derivatives))
                             new_derivatives[param] += 1
 
-                            new_deriv_symbol = DerivSymbol(deriv_symbol, parameters, frozenset(new_derivatives.items()))
+                            new_deriv_symbol = DerivSymbol(
+                                deriv_symbol,
+                                parameters,
+                                frozenset(new_derivatives.items()),
+                            )
 
                             new_symbol_powers = Counter(
                                 dict(
-                                    symbol_powers[:i] + [(symbol, power - 1)] + symbol_powers[i + 1 :]
+                                    symbol_powers[:i]
+                                    + [(symbol, power - 1)]
+                                    + symbol_powers[i + 1 :]
                                 )  # assumes symbols don't change and don't collide
                             )
                             new_symbol_powers[new_deriv_symbol] += 1
 
-                            new_part = term._create({Symbols(frozenset(new_symbol_powers.items())): factor * power})
+                            new_part = term._new(
+                                {
+                                    Symbols(
+                                        frozenset(new_symbol_powers.items())
+                                    ): factor * power
+                                }
+                            )
                             result_terms.append(new_part)
                         case _:
                             pass  # other symbol

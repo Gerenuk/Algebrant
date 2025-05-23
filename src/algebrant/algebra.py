@@ -1,13 +1,14 @@
 import itertools
 import numbers
-from math import prod
-from typing import Any
+from collections.abc import Callable, Iterable, Iterator
+from types import NotImplementedType
+from typing import Any, Protocol, Self, Type, TypeVar
 
-from .base_classes import BaseBasis
-from .common import is_identity, is_zero
+import numpy as np
+
+from .common import is_identity
 from .display_config import MAX_ONE_LINE_ELEM
-from .quotient import Quotient
-from .repr_printer import ReprPrinter
+from .repr_printer import PlainReprMixin
 
 """
 Module implemented with a basis to be able to compare elements
@@ -19,23 +20,53 @@ Note:
 * np.matrix is not able to multiply element-wise inside
 """
 
-Factor = Any
+
+def dot_product(a, b) -> Any:
+    if isinstance(a, Algebra) and isinstance(
+        b, Algebra
+    ):  # TODO: `b` needs to be Algebra?
+        return a.dot(b)
+
+    if isinstance(a, numbers.Real) and isinstance(b, numbers.Real):
+        return a * b
+
+    if (
+        isinstance(a, numbers.Complex)
+        and isinstance(b, numbers.Complex)
+        and hasattr(a, "conjugate")
+    ):
+        return a.conjugate() * b
+
+    if (
+        isinstance(a, np.ndarray)
+        and isinstance(b, np.ndarray)
+        and np.issubdtype(a.dtype, np.number)
+        and np.issubdtype(b.dtype, np.number)
+    ):
+        return np.sum(a.conjugate() * b)
+
+    raise ValueError(f"Do not know not how to dot {type(a)} and {type(b)}")
 
 
-def first_factor(expr):
+Factor = Any  # TODO
+
+
+def _first_factor(expr):
     if isinstance(expr, Algebra):
         if not expr.basis_factor:
             return 0
 
-        _expr_first_basis, expr_first_factor = sorted(expr.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())[0]
-        factor = first_factor(expr_first_factor)
+        _expr_first_basis, expr_first_factor = sorted(
+            expr.basis_factor.items(), key=lambda b_f: b_f[0].sort_key()
+        )[0]
+        factor = _first_factor(expr_first_factor)
 
         return factor
 
     return expr
 
 
-def is_negative(val):
+def _is_negative(val):
     """
     used to determine whether to translate "... + -a" into "... - a"
     """
@@ -43,48 +74,58 @@ def is_negative(val):
         return val < 0
 
     if isinstance(val, numbers.Complex):
-        return val.real < 0 or (val.real == 0 and val.imag < 0)
+        return float(val.real) < 0 or (
+            val.real == 0 and float(val.imag) < 0
+        )  # TODO: why float()
 
     if isinstance(val, Algebra):
-        return is_negative(first_factor(val))
+        return _is_negative(_first_factor(val))
 
     raise ValueError(f"Unknown type {type(val)} for is_negative")
 
 
-class ArithmeticMixin:
-    # TODO: need to declare that __mul__ and __add__ are required?
+class CumuDict[T]:
+    def __init__(self, data: Iterable[tuple[T, Any]] | None = None) -> None:
+        self.data = {}
 
-    def __pow__(self, power: int):
-        if not isinstance(power, int):
-            raise ValueError(f"Cannot pow by {power}. Only integers implemented.")
+        if data is not None:
+            for key, value in data:
+                self.add(key, value)
 
-        if power == 0:
-            return 1  # assumes 1 is a valid element of the algebra
-        elif power >= 1:
-            result = prod(itertools.repeat(self, power))
-        elif power <= -1:
-            result = prod(itertools.repeat(1 / self, abs(power)))
+    def add(self, key: T, value: Any) -> None:
+        if key in self.data:
+            self.data[key] += value
         else:
-            raise ValueError(f"Power {power} not recognized")
+            self.data[key] = value
 
-        return result
-
-    def __sub__(self, other):
-        return self + (-other)
-
-    def __rsub__(self, first):
-        return first + (-self)
-
-    def __truediv__(self, other: Factor) -> "Module":
-        """
-        Only works if invertible
-        """
-        return self * (1 / other)
+    def to_dict(self) -> dict[T, Any]:
+        return self.data
 
 
-class Module(ArithmeticMixin):
+BasisSortKey = tuple[tuple[int, ...], tuple[str, ...]]
+
+
+class BasisProtocol(Protocol):
     """
-    Module with a basis
+    basis for algebra with multiplication
+    """
+
+    def __hash__(self) -> int: ...
+
+    def __eq__(self, other) -> bool: ...
+
+    def sort_key(self) -> BasisSortKey: ...
+
+    @property
+    def is_unity(self) -> bool: ...
+
+
+T = TypeVar("T")
+
+
+class Algebra[T: BasisProtocol](PlainReprMixin):
+    """
+    Algebra with a basis
 
     Always make sure that any basis respects and uses UNITY_BASIS (i.e. return it or overwrite _unity)
     this is because UNITY_BASIS will be created if you add Module + Factor
@@ -94,75 +135,88 @@ class Module(ArithmeticMixin):
     """
 
     def __init__(
-        self, basis_factor: dict[BaseBasis, Any], *, basis_class, op_prio, normalize=None, clip_small=1e-10
+        self,
+        basis_factor: dict[T, Any],
+        *,
+        basis_class,
+        op_prio=1,
+        linear_func_maps=None,
+        normalize_func: Callable[[T, Type[T]], Iterable[tuple[T, Any]]] | None = None,
     ) -> None:
         """
         op_prio: low is highest prio; less prio will pass operation to more prio
         """
         for key, _val in basis_factor.items():
-            if key.__class__ != basis_class:
-                raise ValueError(f"One basis class in basis_factor is {key.__class__}, but should be {basis_class}")
-
-        if clip_small is not None:
-            max_factor = max(  # determine max. absolute value of factors in order to potential clip small values
-                [
-                    abs(factor)
-                    for factor in basis_factor.values()
-                    if isinstance(factor, numbers.Complex)
-                    # hasattr(factor, "__abs__")
-                ],
-                default=None,
-            )
-
-        basis_factor = {
-            basis: factor
-            for basis, factor in basis_factor.items()
-            if not is_zero(factor)
-            and (
-                clip_small is None
-                or max_factor is None
-                or not (
-                    isinstance(factor, numbers.Complex)
-                    # hasattr(factor, "__abs__")
-                    and abs(factor) < max_factor * clip_small
+            if not isinstance(key, basis_class):  # TODO: subclass ok?
+                raise ValueError(
+                    f"One basis class in basis_factor is {key.__class__}, but should be {basis_class}"
                 )
-            )
-        }
 
-        self.basis_factor = normalize(basis_factor) if normalize else basis_factor
-        self.normalize = normalize
+        if normalize_func is not None:
+            self.basis_factor: dict[T, Any] = CumuDict(
+                (new_basis, factor * extra_factor)
+                for basis, factor in basis_factor.items()
+                for new_basis, extra_factor in normalize_func(basis, basis_class)
+            ).to_dict()
+        else:
+            self.basis_factor = basis_factor
+
         self.basis_class = basis_class
         self.unity_basis = basis_class.unity()
         self.op_prio = op_prio
-        self.clip_small = clip_small
+        self.linear_func_maps = linear_func_maps if linear_func_maps is not None else {}
+        self.normalize_func = normalize_func
 
-    def transform(self, func):  # currently not used much
-        return self._create(func(self.basis_factor))
+    def __getattr__(self, attr) -> Any:  # TODO: not Any
+        """
+        allows to call functions on the basis
+        """
+        if attr in self.linear_func_maps:
+            func = self.linear_func_maps[attr]
+            return lambda: self.linear_func(func)
 
-    def _create(self, basis_factor):
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{attr}'"
+        )
+
+    def __mul__(self, other: Any) -> Self | NotImplementedType:
+        return self._multiply(other, lambda b1, f1, b2, f2: b1.mul(b2, f1, f2))
+
+    def __xor__(self, other: Any) -> Self | NotImplementedType:
+        return self._multiply(other, lambda b1, f1, b2, f2: b1.xor(b2, f1, f2))
+
+    def __lshift__(self, other: Any) -> Self | NotImplementedType:
+        return self._multiply(other, lambda b1, f1, b2, f2: b1.lshift(b2, f1, f2))
+
+    def __rshift__(self, other: Any) -> Self | NotImplementedType:
+        return self._multiply(other, lambda b1, f1, b2, f2: b1.rshift(b2, f1, f2))
+
+    def _new(self, basis_factor: dict[T, Any]) -> Self:
         """
         used to create results with appropriate initialization of the same properties
         """
-        return self.__class__(
-            basis_factor,
+        return self.__class__(  # TODO: generalize?
+            basis_factor=basis_factor,
             basis_class=self.basis_class,
             op_prio=self.op_prio,
-            normalize=self.normalize,
-            clip_small=self.clip_small,
+            linear_func_maps=self.linear_func_maps,
+            normalize_func=self.normalize_func,
         )
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[tuple[T, Any]]:
         return iter(self.basis_factor.items())
 
-    def _ensure_prio(self, other):
+    def _ensure_prio(self, other: Any) -> Self:
         """
         less prio Module are rejected
         more prio
         """
-        if isinstance(other, numbers.Number) or (hasattr(other, "op_prio") and other.op_prio > self.op_prio):
+        if isinstance(other, numbers.Number) or (
+            hasattr(other, "op_prio") and other.op_prio > self.op_prio
+        ):
             return self._unity(other)
 
-        if isinstance(other, Module) and other.op_prio == self.op_prio:
+        if isinstance(other, self.__class__) and other.op_prio == self.op_prio:
             if self.basis_class == other.basis_class:
                 return other
             else:
@@ -172,56 +226,60 @@ class Module(ArithmeticMixin):
 
         return NotImplemented
 
-    def __add__(self, other) -> "Module":
+    def __add__(self, other: Any) -> Self:
         if other == 0:
             return self
 
         other_wrapped = self._ensure_prio(other)
 
         if other_wrapped is NotImplemented:
-            if isinstance(other, self.__class__):  # because same class __radd__ would not be called due to Python
+            if isinstance(
+                other, self.__class__
+            ):  # because same class __radd__ would not be called due to Python
                 return other.__radd__(self)
 
             return NotImplemented
 
-        basis_factor = self.basis_factor.copy()
+        result_basis_factor = CumuDict(
+            itertools.chain(
+                self.basis_factor.items(), other_wrapped.basis_factor.items()
+            )
+        ).to_dict()
 
-        for other_basis, other_factor in other_wrapped.basis_factor.items():
-            if other_basis in basis_factor:
-                basis_factor[other_basis] = basis_factor[other_basis] + other_factor
-            else:
-                basis_factor[other_basis] = other_factor
+        return self._new(result_basis_factor)
 
-        return self._create(basis_factor)
-
-    def __radd__(self, other) -> "Module":
+    def __radd__(self, other) -> Self:
         return self + other
 
-    def __mul__(self, other: Factor) -> "Module":
+    def __rmul__(self, other: Factor) -> Self:
         """
-        support only multiplication with factor level
-        strictly speaking this makes it a left+right module
-        other factor always unchanged when going through the basis
+        other is left-multiplied
+        for algebra multiplication implement __mul__
         """
         if other == 1:
             return self
 
-        basis_factor = {basis: factor * other for basis, factor in self.basis_factor.items()}
+        if other == 0:
+            return self._zero()
 
-        return self._create(basis_factor)
+        basis_factor = {
+            basis: other * factor for basis, factor in self.basis_factor.items()
+        }
 
-    def __rmul__(self, other: Factor) -> "Module":
-        if other == 1:
-            return self
+        return self._new(basis_factor)
 
-        basis_factor = {basis: other * factor for basis, factor in self.basis_factor.items()}
+    def __neg__(self) -> Self:
+        return self._new(
+            {basis: -factor for basis, factor in self.basis_factor.items()}
+        )
 
-        return self._create(basis_factor)
+    def __sub__(self, other: Self) -> Self:
+        return self + (-other)
 
-    def __neg__(self):
-        return self._create({basis: -factor for basis, factor in self.basis_factor.items()})
+    def __rsub__(self, first) -> Self:
+        return first + (-self)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if other == 0:
             return not self.basis_factor
 
@@ -230,14 +288,15 @@ class Module(ArithmeticMixin):
         if other is NotImplemented:
             return NotImplemented
 
-        if isinstance(other, self.__class__):
+        if isinstance(other, self.__class__):  # TODO: check?
             return self.basis_factor.keys() == other.basis_factor.keys() and all(
-                self.basis_factor[basis] == other.basis_factor[basis] for basis in self.basis_factor.keys()
+                self.basis_factor[basis] == other.basis_factor[basis]
+                for basis in self.basis_factor.keys()
             )
 
         return self == self._unity(other)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(frozenset(self.basis_factor.items()))
 
     def __getitem__(self, basis):
@@ -246,28 +305,16 @@ class Module(ArithmeticMixin):
         """
         return self.basis_factor[basis]
 
-    @property
-    def scalar_part(self):
-        """
-        return 0 if not explicit unity part
-        """
-        return sum(
-            factor_scalar * basis_scalar
-            for basis, factor in self.basis_factor.items()
-            for factor_scalar, basis_scalar in [(getattr(factor, "scalar_part", factor), basis.scalar_part)]
-            if basis_scalar != 0
-        )
-
-    def _unity(self, factor: Factor):  # TODO: annotate cls
+    def _unity(self, factor: Factor) -> Self:
         """
         Returns 1 element
         Needed update upgrade factors with a basis for operations
         e.g. when adding a scalar value
         """
-        return self._create({self.unity_basis: factor})
+        return self._new({self.unity_basis: factor})
 
-    def _zero(self):  # rarely needed
-        return self._create({})
+    def _zero(self) -> Self:  # rarely needed
+        return self._new({})
 
     def _repr_pretty_(self, printer, cycle, support_newlines=True):
         if cycle:
@@ -277,14 +324,18 @@ class Module(ArithmeticMixin):
             printer.text("0")
             return
 
-        multi_line = support_newlines and len(self.basis_factor) > 1 and _is_long_repr(self.basis_factor)
+        multi_line = (
+            support_newlines
+            and len(self.basis_factor) > 1
+            and _is_long_repr(self.basis_factor)
+        )
 
         for i, (basis, factor) in enumerate(
-            sorted(self.basis_factor.items(), key=lambda b_f: b_f[0]._sort_key())
+            sorted(self.basis_factor.items(), key=lambda b_f: b_f[0].sort_key())
         ):  # assumes basis has __lt__
             is_first_element = i == 0
 
-            if is_negative(factor):
+            if _is_negative(factor):
                 neg_sign = True
                 factor = -factor
             else:
@@ -305,9 +356,11 @@ class Module(ArithmeticMixin):
                 else:
                     printer.text(" + " if not neg_sign else " - ")
 
-            do_print_factor = basis.is_unity() or not is_identity(factor)
+            do_print_factor = basis.is_unity or not is_identity(factor)
 
-            factor_needs_parenthesis = do_print_factor and _repr_needs_parenthesis(factor)
+            factor_needs_parenthesis = do_print_factor and _repr_needs_parenthesis(
+                factor
+            )
 
             if factor_needs_parenthesis:
                 printer.begin_group(1, "(")
@@ -318,7 +371,7 @@ class Module(ArithmeticMixin):
             if factor_needs_parenthesis:
                 printer.end_group(1, ")")
 
-            if not basis.is_unity():
+            if not basis.is_unity:
                 if do_print_factor:
                     printer.text(" ")
 
@@ -327,41 +380,95 @@ class Module(ArithmeticMixin):
         if multi_line:
             printer.end_group(2)
 
-    def __repr__(self):
-        printer = ReprPrinter()
-        self._repr_pretty_(printer, cycle=False, support_newlines=False)
-        return "{ " + printer.value() + " }"
-
-    @property
-    def c(self):
-        return self.conjugate()
-
-    def linear_func(self, func_name: str):
-        return self._create(
-            {
-                # fmt: off
-                new_basis:
-                new_factor
-                # fmt: on
-                for basis, factor in self.basis_factor.items()
-                for new_basis, new_factor in [getattr(basis, func_name)(factor)]
-                if new_factor != 0
-            }
+    def linear_func(self, func) -> Self:
+        return self._new(
+            CumuDict(
+                func(basis, factor) for basis, factor in self.basis_factor.items()
+            ).to_dict()
         )
 
-    def conjugate(self):
+    def _multiply(self, other, basis_mul) -> Self | NotImplementedType:
+        other_wrapped = self._ensure_prio(other)
+
+        if other_wrapped is NotImplemented:
+            if isinstance(
+                other, self.__class__
+            ):  # because same class __radd__ would not be called due to Python
+                return other.__rmul__(self)
+            return NotImplemented
+
+        try:
+            result_basis_factor = CumuDict(
+                itertools.chain.from_iterable(
+                    basis_mul(basis1, factor1, basis2, factor2).items()
+                    for (basis1, factor1), (basis2, factor2) in itertools.product(
+                        self.basis_factor.items(), other_wrapped.basis_factor.items()
+                    )
+                )
+            ).to_dict()
+        except TypeError:  # TODO: hides some errors?
+            return NotImplemented
+
+        result = self._new(result_basis_factor)
+
+        return result
+
+    # def __mul__(self, other: Self) -> Self:
+    #     """
+    #     __rmul__ not needed since Algebra*Algebra
+    #     or multiplied from the left by Module
+
+    #     if __mul__ does not support Algebra, then it must be in the factor(?)
+    #     TODO: check if this is the case
+    #     """
+    #     if isinstance(other, numbers.Number):
+    #         if other == 1:
+    #             return self
+
+    #         if other == 0:
+    #             return self._zero()
+
+    #     return self._multiply(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2))
+
+    # def __rtruediv__(self, numer) -> Self | Quotient:
+    #     """
+    #     divide if only 1 element in sum
+    #     and returns Quotient otherwise
+    #     """
+    #     if not self.basis_factor:
+    #         raise ZeroDivisionError("Algebra is zero")
+
+    #     # if len(self.basis_factor) == 1:  # TODO: need special rule?
+    #     #     basis, factor = next(iter(self.basis_factor.items()))
+    #     #     if hasattr(basis, "inverse") and (
+    #     #         (inverse := basis.inverse()) is not NotImplemented
+    #     #     ):  # in those cases there is a simplified inverse
+    #     #         return numer * self._clone(inverse) * (1 / factor)
+
+    #     return Quotient(numer, self)
+
+    def dot(self, other) -> Any:
         """
-        takes conjugate separately on basis and factor (for performance)
-        not appropriate when conjugate of basis introduces new factor
+        assumes all basis are orthonormal
         """
-        return self.linear_func("conjugate")
+        other_wrapped = self._ensure_prio(other)
+
+        if other_wrapped is NotImplemented:  # TODO: generalize
+            raise NotImplementedError(
+                f"Cannot dot {self.__class__} with {other.__class__}"
+            )
+
+        return sum(
+            dot_product(self.basis_factor[key], other_wrapped.basis_factor[key])
+            for key in self.basis_factor.keys() & other_wrapped.basis_factor.keys()
+        )
 
 
-def _repr_needs_parenthesis(factor):
+def _repr_needs_parenthesis(factor) -> bool:
     # if isinstance(factor, numbers.Complex):
     #    return factor.real != 0 and factor.imag != 0
 
-    if isinstance(factor, Module):
+    if isinstance(factor, Algebra):
         return len(factor.basis_factor) > 1  # or (
         #    len(factor.basis_factor) == 1 and _repr_needs_parenthesis(next(iter(factor.basis_factor.values())))
         # )
@@ -369,67 +476,10 @@ def _repr_needs_parenthesis(factor):
     return False
 
 
-def _is_long_repr(basis_factor):
+def _is_long_repr(basis_factor) -> bool:
     result = len(basis_factor) > MAX_ONE_LINE_ELEM or any(
-        isinstance(factor, Module) and _is_long_repr(factor.basis_factor) for factor in basis_factor.values()
+        isinstance(factor, Algebra) and _is_long_repr(factor.basis_factor)
+        for factor in basis_factor.values()
     )
 
     return result
-
-
-class Algebra(Module):
-    """
-    adds multiplication between "Module elements"
-    basis elements need to be able to multiply and yield Algebra object
-    in multiplication only use Factor or Algebra; never a basis
-    """
-
-    def _mul(self, other, basis_mul):
-        other_wrapped = self._ensure_prio(other)
-
-        if other_wrapped is NotImplemented:
-            if isinstance(other, self.__class__):  # because same class __radd__ would not be called due to Python
-                return other.__rmul__(self)
-            return NotImplemented
-
-        basis_factor = {}
-        for (basis1, factor1), (basis2, factor2) in itertools.product(
-            self.basis_factor.items(), other_wrapped.basis_factor.items()
-        ):
-            #####
-            new_basis_factors = basis_mul(basis1, factor1, basis2, factor2)
-            #####
-
-            for result_basis, result_factor in new_basis_factors.items():
-                if result_basis not in basis_factor:
-                    basis_factor[result_basis] = result_factor
-                else:
-                    basis_factor[result_basis] += result_factor
-
-        result = self._create(basis_factor)
-
-        return result
-
-    def __mul__(self, other: "Algebra") -> "Algebra":
-        """
-        __rmul__ not needed since Algebra*Algebra
-        or multiplied from the right?
-        """
-        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2))
-
-    def __rtruediv__(self, numer):
-        """
-        divide if only 1 element in sum
-        and returns Quotient otherwise
-        """
-        if not self.basis_factor:
-            raise ZeroDivisionError("Algebra is zero")
-
-        if len(self.basis_factor) == 1:
-            basis, factor = next(iter(self.basis_factor.items()))
-            if hasattr(basis, "inverse") and (
-                (inverse := basis.inverse()) is not NotImplemented
-            ):  # in those cases there is a simplified inverse
-                return numer * self._create(inverse) * (1 / factor)
-
-        return Quotient(numer, self)

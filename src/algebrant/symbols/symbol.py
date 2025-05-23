@@ -1,23 +1,25 @@
 import dataclasses
 from dataclasses import dataclass
+from typing import Callable
 
-from .base_classes import BaseSymbol
-from .repr_printer import ReprPrinter
+from algebrant.repr_printer import PlainReprMixin
 
 try:
     import colorful
 
-    colorful.use_true_colors()
-    symbol_col = colorful.limeGreen
+    colorful.use_true_colors()  # type: ignore
+    symbol_col = colorful.limeGreen  # type: ignore
 except ImportError:
-    symbol_col = lambda x: x
+
+    def symbol_col(x: str) -> str:
+        return x
 
 
 @dataclass(unsafe_hash=True, order=True)
-class Symbol(BaseSymbol):
+class Symbol(PlainReprMixin):
     name: str
     is_conjugate: bool = False
-    color: callable = symbol_col
+    color: Callable[[str], str] = symbol_col
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:
@@ -37,8 +39,3 @@ class Symbol(BaseSymbol):
             return dataclasses.replace(self, is_conjugate=not self.is_conjugate)
 
         return self
-
-    def __repr__(self):
-        printer = ReprPrinter()
-        self._repr_pretty_(printer, cycle=False)
-        return printer.value()

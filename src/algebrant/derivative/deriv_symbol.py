@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from .base_classes import BaseSymbol
+from ....archive.base_classes import BaseSymbol
 
 try:
     import colorful

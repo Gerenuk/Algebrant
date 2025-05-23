@@ -1,23 +1,24 @@
 import itertools
 import math
-import types
+import numbers
 from collections import Counter
 from dataclasses import dataclass
 
 import numpy as np
 
-from .algebra import Algebra
-from .base_classes import BaseBasis
-from .common import conjugate
-from .repr_printer import ReprPrinter
+from ..algebra import Algebra
+from ..common import conjugate
+from ..repr_printer import PlainReprMixin
 
 try:
     import colorful
 
-    colorful.use_true_colors()
-    vec_col = colorful.deepSkyBlue
+    colorful.use_true_colors()  # type: ignore
+    vec_col = colorful.deepSkyBlue  # type: ignore
 except ImportError:
-    vec_col = lambda x: x
+
+    def vec_col(x):
+        return x
 
 
 """
@@ -31,7 +32,10 @@ Todos (some old?):
 def cl_dot(a, b):
     factors_a = a.basis_factor
     factors_b = b.basis_factor
-    return sum(conjugate(factors_a[basis]) * factors_b[basis] for basis in factors_a.keys() & factors_b.keys())
+    return sum(
+        conjugate(factors_a[basis]) * factors_b[basis]
+        for basis in factors_a.keys() & factors_b.keys()
+    )
 
 
 def sqr_to_scalar(val: "CliffordAlgebra"):
@@ -41,15 +45,21 @@ def sqr_to_scalar(val: "CliffordAlgebra"):
     non_scalar = val.take_grades(lambda g: g > 0)
 
     bases, values = zip(*non_scalar)
-    all_anti_commute = not any(b1.commutes_with(b2) for b1, b2 in itertools.combinations(bases, r=2))
+    all_anti_commute = not any(
+        b1.commutes_with(b2) for b1, b2 in itertools.combinations(bases, r=2)
+    )
 
-    non_scalar_sqr = sum(value**2 * base.sqr() for base, value in zip(bases, values)) if all_anti_commute else None
+    non_scalar_sqr = (
+        sum(value**2 * base.sqr() for base, value in zip(bases, values))
+        if all_anti_commute
+        else None
+    )
 
     return val.scalar_part**2, non_scalar_sqr
 
 
 @dataclass(unsafe_hash=True)
-class CliffordBasis(BaseBasis):
+class CliffordBasis(PlainReprMixin):
     bases: tuple  # needs to be sorted (or will be sorted by force)
 
     def __post_init__(self):
@@ -81,7 +91,9 @@ class CliffordBasis(BaseBasis):
 
         result_bases, is_negative = ga_basis_mul(self.bases, other.bases)
 
-        num_squares_to_minus_1 = sum(self._vector_squares_to_minus_1(basis) for basis in common_bases)
+        num_squares_to_minus_1 = sum(
+            self._vector_squares_to_minus_1(basis) for basis in common_bases
+        )
         if num_squares_to_minus_1 % 2 == 1:
             is_negative = not is_negative
 
@@ -101,11 +113,6 @@ class CliffordBasis(BaseBasis):
 
             printer.pretty(vec_col(basis))  # TODO: later Basis objects?
 
-    def __repr__(self):
-        printer = ReprPrinter()
-        self._repr_pretty_(printer, cycle=False)
-        return printer.value()
-
     def commutes_with(self, other: "CliffordBasis"):
         len_self = len(self.bases)
         len_other = len(other.bases)
@@ -121,7 +128,9 @@ class CliffordBasis(BaseBasis):
         is_negative = len(self.bases) % 4 in (2, 3)
 
         # check for vectors squaring to -1
-        num_negative_squares = sum(self._vector_squares_to_minus_1(basis) for basis in self.bases)
+        num_negative_squares = sum(
+            self._vector_squares_to_minus_1(basis) for basis in self.bases
+        )
         if num_negative_squares % 2 == 1:  # assuming negative basis vector change sign
             is_negative = not is_negative
 
@@ -134,7 +143,9 @@ class CliffordBasis(BaseBasis):
             factor_sign = 1
 
         # check for vectors squaring to -1
-        num_negative_squares = sum(self._vector_squares_to_minus_1(basis) for basis in self.bases)
+        num_negative_squares = sum(
+            self._vector_squares_to_minus_1(basis) for basis in self.bases
+        )
         if num_negative_squares % 2 == 1:  # assuming negative basis vector change sign
             factor_sign = -factor_sign
 
@@ -147,11 +158,19 @@ class CliffordBasis(BaseBasis):
 
         convention that capital first letter squares to -1
         """
-        return isinstance(basis_elem, str) and len(basis_elem) >= 1 and basis_elem[0].isupper()
+        return (
+            isinstance(basis_elem, str)
+            and len(basis_elem) >= 1
+            and basis_elem[0].isupper()
+        )
 
     @staticmethod
     def _vector_squares_to_zero(basis_elem):
-        return isinstance(basis_elem, str) and len(basis_elem) >= 1 and basis_elem[0] == "_"
+        return (
+            isinstance(basis_elem, str)
+            and len(basis_elem) >= 1
+            and basis_elem[0] == "_"
+        )
 
 
 class CliffordAlgebra(Algebra):
@@ -159,56 +178,7 @@ class CliffordAlgebra(Algebra):
     basis elements must be CliffordBases with tuples
     """
 
-    @property
-    def i(self):
-        """
-        Main involution
-
-        satisfies (A * B).i = A.i * B.i
-        """
-        return self.flip_grade_signs(lambda x: x % 2 == 1)
-
-    @property
-    def r(self):
-        """
-        Anti-involution
-        Reversion - reverses multi-vectors (does not take conjugate)
-
-        satisfies (A * B).r = B.r * A.r
-
-        A*A.r cannot have grades 4k+{2,3}
-        """
-        return self.flip_grade_signs(lambda x: x % 4 in (2, 3))
-
-    @property
-    def cl(self):
-        """
-        Anti-involution
-        Clifford conjugate - combination of A.c = A.r.i
-
-        satisfies (A * B).c = B.c * A.c
-
-        A*A.c cannot have grades 4k+{1,2}
-        """
-        return self.flip_grade_signs(lambda x: x % 4 in (1, 2))
-
-    def flip_grade_signs(self, sign_flip_condition, factor_conjugate=False):
-        basis_factor = {}
-        for basis, factor in self.basis_factor.items():
-            if factor_conjugate:
-                factor = conjugate(factor)
-                basis, extra_factor = conjugate(basis)  # e.g. for blades squaring to -1
-                factor *= extra_factor  # TODO: like this?
-
-            if sign_flip_condition(basis.grade):
-                factor = -factor
-
-            basis_factor[basis] = factor
-
-        return self._create(basis_factor)
-
     def __rtruediv__(self, numer):
-
         # TODO: rule for algebra split
         # e.g. split into A(1+I)+B(1-I) or A(1+iI)+B(1-iI) and I is product of all bases
         # where A,B have single (anti)commutation type with I
@@ -244,12 +214,20 @@ class CliffordAlgebra(Algebra):
             if scalar == 0:
                 raise ZeroDivisionError(f"Zero division 1/((s+M)(s-M)) for {self}")
 
-            return numer * self.flip_grade_signs(lambda g: g > 0) * (1 / scalar)  # division on scalars here
+            return (
+                numer * self.flip_grade_signs(lambda g: g > 0) * (1 / scalar)
+            )  # division on scalars here
 
         #################################### Special rule for grades {0,1,dim-1,dim}
         # this can save 1 step instead of doing Clifford conjugation and also is needed for higher even dim.
 
-        dimension = len(set(itertools.chain.from_iterable(basis.bases for basis in self.basis_factor.keys())))
+        dimension = len(
+            set(
+                itertools.chain.from_iterable(
+                    basis.bases for basis in self.basis_factor.keys()
+                )
+            )
+        )
 
         if grades <= {0, 1, dimension - 1, dimension}:
             # print("Special {0,1,dim-1,dim}")
@@ -264,7 +242,9 @@ class CliffordAlgebra(Algebra):
             new_inverse = self * flipped_sign_mv
 
             if new_inverse == 0:
-                raise ZeroDivisionError(f"Zero division 1/(A*i(A; {','.join(map(str, flip_grades))})) for {self}")
+                raise ZeroDivisionError(
+                    f"Zero division 1/(A*i(A; {','.join(map(str, flip_grades))})) for {self}"
+                )
 
             if new_inverse.grades == {0}:
                 inv_of_new_inverse = 1 / new_inverse.scalar_part
@@ -278,9 +258,13 @@ class CliffordAlgebra(Algebra):
                 scalar = scalar_sqr - non_scalar_sqr
 
                 if scalar == 0:
-                    raise ZeroDivisionError(f"Zero division 1/((s+M)(s-M)) for {new_inverse}")
+                    raise ZeroDivisionError(
+                        f"Zero division 1/((s+M)(s-M)) for {new_inverse}"
+                    )
 
-                inv_of_new_inverse = new_inverse.flip_grade_signs(lambda g: g > 0) * (1 / scalar)
+                inv_of_new_inverse = new_inverse.flip_grade_signs(lambda g: g > 0) * (
+                    1 / scalar
+                )
 
             return numer * flipped_sign_mv * inv_of_new_inverse
 
@@ -309,9 +293,9 @@ class CliffordAlgebra(Algebra):
             # print("Reverse")
             new_inverse = self * self.r
 
-            assert not any(
-                g % 4 in (2, 3) for g in new_inverse.grades
-            ), f"Grades 2,3 did not reduce with result {new_inverse} (should not happen unless due to floating point uncertainty)"
+            assert not any(g % 4 in (2, 3) for g in new_inverse.grades), (
+                f"Grades 2,3 did not reduce with result {new_inverse} (should not happen unless due to floating point uncertainty)"
+            )
 
             if new_inverse == 0:
                 raise ZeroDivisionError(f"Zero division 1/(A*A.r) for {self}")
@@ -322,7 +306,8 @@ class CliffordAlgebra(Algebra):
             return numer * self.r * (1 / new_inverse)
 
         ################################# the following works generally
-        # but may require more steps
+        # TODO: replace since numerical issues
+
         max_steps = 2 ** math.floor((dimension + 1) / 2)
         inv = self
         for i in range(1, max_steps + 1):
@@ -331,7 +316,9 @@ class CliffordAlgebra(Algebra):
             if inv.grades <= {0}:
                 break
         else:
-            raise NotImplementedError(f"Iterations of general inversion algorithm failed with {i=} {inv=} {A=}")
+            raise NotImplementedError(
+                f"Iterations of general inversion algorithm failed with {i=} {inv=} {A=}"
+            )
 
         if inv == 0:
             raise ZeroDivisionError("Division by zero in general algorithm")
@@ -340,14 +327,23 @@ class CliffordAlgebra(Algebra):
 
         # raise NotImplementedError(f"Cannot divide by multivector with grades {self.grades}: {self} ")
 
+    def __matmul__(self, other):
+        # TODO: make more efficient implementation
+        return (self.conjugate() * other).scalar_part
+
     def __abs__(self):
         # TODO: rather use inner product
         abs_sqr = sum(scalar * conjugate(scalar) for _base, scalar in self)
 
         if isinstance(abs_sqr, complex) or np.iscomplexobj(abs_sqr):
-            assert abs_sqr == 0 or abs_sqr.imag < abs(abs_sqr) * 1e-10, abs_sqr  # TODO: not hard-code?
+            assert abs_sqr == 0 or abs_sqr.imag < abs(abs_sqr) * 1e-10, (
+                abs_sqr
+            )  # TODO: not hard-code?
 
             abs_sqr = abs_sqr.real  # since should always be real
+
+        if not isinstance(abs_sqr, numbers.Number):
+            raise TypeError(f"Cannot take abs of {abs_sqr} of type {type(abs_sqr)}")
 
         return math.sqrt(abs_sqr)
 
@@ -356,35 +352,36 @@ class CliffordAlgebra(Algebra):
         __rmul__ not needed since Algebra*Algebra
         or multiplied from the right?
         """
-        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2) if not set(b1.bases) & set(b2.bases) else {})
+        return self._multiply(
+            other,
+            lambda b1, f1, b2, f2: b1.mul(f1, b2, f2)
+            if not set(b1.bases) & set(b2.bases)
+            else {},
+        )
 
     def __lshift__(self, other: "Algebra") -> "Algebra":
         """
         __rmul__ not needed since Algebra*Algebra
         or multiplied from the right?
         """
-        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2) if set(b1.bases) <= set(b2.bases) else {})
+        return self._multiply(
+            other,
+            lambda b1, f1, b2, f2: b1.mul(f1, b2, f2)
+            if set(b1.bases) <= set(b2.bases)
+            else {},
+        )
 
     def __rshift__(self, other: "Algebra") -> "Algebra":
         """
         __rmul__ not needed since Algebra*Algebra
         or multiplied from the right?
         """
-        return self._mul(other, lambda b1, f1, b2, f2: b1.mul(f1, b2, f2) if set(b1.bases) >= set(b2.bases) else {})
-
-    def take_grades(self, *grades):
-        if grades and isinstance(grades[0], types.FunctionType):
-            grade_test_func = grades[0]
-        else:
-            grade_test_func = lambda g: g in grades
-
-        return self._create(
-            {basis: factor for basis, factor in self.basis_factor.items() if grade_test_func(basis.grade)}
+        return self._multiply(
+            other,
+            lambda b1, f1, b2, f2: b1.mul(f1, b2, f2)
+            if set(b1.bases) >= set(b2.bases)
+            else {},
         )
-
-    @property
-    def grades(self):
-        return frozenset(basis.grade for basis in self.basis_factor.keys())
 
 
 def ga_basis_mul(basis1, basis2):

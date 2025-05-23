@@ -2,17 +2,19 @@ import dataclasses
 import itertools
 from dataclasses import dataclass
 
-from .base_classes import BaseBasis
+from ...archive.base_classes import BaseBasis
 from .repr_printer import ReprPrinter
 from .symbol import BaseSymbol
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(unsafe_hash=True)  # TODO: not dataclass?
 class NCSymbols(BaseBasis):
     symbols: tuple[BaseSymbol]
 
     def conjugate(self, factor):
-        return self._create(tuple(sym.conjugate() for sym in reversed(self.symbols))), factor.conjugate()
+        return self._create(
+            tuple(sym.conjugate() for sym in reversed(self.symbols))
+        ), factor.conjugate()
 
     @property
     def scalar_part(self):

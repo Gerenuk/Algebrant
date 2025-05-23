@@ -1,3 +1,5 @@
+from typing import Any
+
 from .common import conjugate
 
 """
@@ -19,7 +21,7 @@ QUOTIENT_OP_PRIO = -1
 
 
 class Quotient:
-    def __init__(self, numer, denom=1, *, op_prio=QUOTIENT_OP_PRIO):
+    def __init__(self, numer: Any, denom: Any = 1, *, op_prio=QUOTIENT_OP_PRIO):
         if numer == 0:
             denom = 1
 
@@ -70,7 +72,9 @@ class Quotient:
         raise NotImplementedError("Equality not implemented")
 
     def conjugate(self):
-        return Quotient(conjugate(self.numer), conjugate(self.denom), op_prio=self.op_prio)
+        return Quotient(
+            conjugate(self.numer), conjugate(self.denom), op_prio=self.op_prio
+        )
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:

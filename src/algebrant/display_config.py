@@ -1,19 +1,4 @@
-from .deriv_symbol import DerivSymbol
-from .symbol import Symbol
-
 MAX_ONE_LINE_ELEM = 3
-
-
-def symbol_sort_key(symbol):
-    match symbol:
-        case Symbol(name, is_conjugate):
-            key = (0, name, is_conjugate)
-        case DerivSymbol(symbol, _, derivativates):
-            key = (1, bool(derivativates), symbol.name)  # TODO: more specific order?
-        case _:
-            raise ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
-
-    return key
 
 
 try:

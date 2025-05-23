@@ -9,10 +9,6 @@ TODO:
 """
 
 
-def mat_dot(a, b):
-    return np.sum(a.conj() * b)
-
-
 # ipython = get_ipython()
 
 
@@ -33,18 +29,26 @@ class VecBasis:
 
         if names is not None:
             if not len(basis_vecs) == len(names):
-                raise ValueError(f"Incorrect length names: len(basis_vecs)={len(basis_vecs)}, len(names)={len(names)}")
+                raise ValueError(
+                    f"Incorrect length names: len(basis_vecs)={len(basis_vecs)}, len(names)={len(names)}"
+                )
 
             if len(set(names)) != len(names):
                 raise ValueError(
-                    f"Duplicate names: { {name:count for name, count in Counter(names).items() if count>1} }"
+                    f"Duplicate names: { {name: count for name, count in Counter(names).items() if count > 1} }"
                 )
 
             self.names = names
         else:
             self.names = [f"e{i}" for i in range(1, len(basis_vecs) + 1)]
 
-        self.gram_matrix = np.array([[dot(b1, b2) for b2 in basis_vecs] for b1 in basis_vecs])
+        self.gram_matrix = np.array(
+            [[dot(b1, b2) for b2 in basis_vecs] for b1 in basis_vecs]
+        )
+
+        # TODO: hack since linalg cannot for float128
+        if self.gram_matrix.dtype == np.float128:
+            self.gram_matrix = self.gram_matrix.astype(np.float64)
 
         rank = np.linalg.matrix_rank(self.gram_matrix)
         if rank != self.gram_matrix.shape[0]:
@@ -53,7 +57,12 @@ class VecBasis:
         self.inv_gram_matrix = np.linalg.inv(self.gram_matrix)
 
         self.dual_basis_vecs = [  # currently used only for .trace()
-            sum(coef * vec for coef, vec in zip(self.inv_gram_matrix[i, :], self.basis_vecs, strict=True))
+            sum(
+                coef * vec
+                for coef, vec in zip(
+                    self.inv_gram_matrix[i, :], self.basis_vecs, strict=True
+                )
+            )
             for i in range(self.dim)
         ]
 
@@ -75,7 +84,10 @@ class VecBasis:
             if isinstance(elem_from_coef, np.ndarray):
                 is_equal = np.all(np.isclose(elem_from_coef, vec))
             else:
-                is_equal = elem_from_coef == vec
+                try:
+                    is_equal = abs(elem_from_coef - vec) < self.min_abs
+                except TypeError:
+                    is_equal = elem_from_coef == vec
 
             # TODO: use (vector) norm instead (for imprecise comparison)
 
@@ -105,7 +117,8 @@ class VecBasis:
         coef_dict = self.to_dict(vec, verify=verify)
 
         result = " + ".join(
-            (coef_formatter(coef) + " " if coef != 1 else "") + name for name, coef in coef_dict.items()
+            (coef_formatter(coef) + " " if coef != 1 else "") + name
+            for name, coef in coef_dict.items()
         )
 
         if not result:
@@ -138,7 +151,10 @@ class VecBasis:
         trace
         such that V.trace(lambda x: m @ x) == np.trace(m)
         """
-        return sum(self._dot(b_d, op(b)) for b_d, b in zip(self.dual_basis_vecs, self.basis_vecs, strict=True))
+        return sum(
+            self._dot(b_d, op(b))
+            for b_d, b in zip(self.dual_basis_vecs, self.basis_vecs, strict=True)
+        )
 
     def __repr__(self):
         return f"VecBasis(dim={self.dim})"
@@ -148,27 +164,32 @@ class VecBasis:
 
 
 class ConvertVecBasis:
-    def __init__(self, vec_basis_list, names):
+    def __init__(self, *vec_basis_list):
         dims = set(v.dim for v in vec_basis_list)
         if len(dims) != 1:
-            raise ValueError(f"Inconsistent dimensions {[v.dim for v in vec_basis_list]}")
+            raise ValueError(
+                f"Inconsistent dimensions {[v.dim for v in vec_basis_list]}"
+            )
 
-        self.dim = next(iter(dims))
-        self.names = names
+        self.dim = next(iter(dims))  # used only for __repr__
+
         self.vec_basis_list = vec_basis_list
 
-    def __call__(self, elem, name_from, name_to, verify=True):
-        if name_from != "v":
-            coefs = self.vec_basis_list[self.names.index(name_from)].to_coef(elem, verify=verify)
+    def __call__(self, elem, idx_from, idx_to, verify=True):
+        """
+        idx = None uses a raw coefficient vector
+        """
+        if idx_from is not None:
+            coefs = self.vec_basis_list[idx_from].to_coef(elem, verify=verify)
         else:
             coefs = elem
 
-        if name_to != "v":
-            result = self.vec_basis_list[self.names.index(name_to)].to_vec(coefs)
+        if idx_to is not None:
+            result = self.vec_basis_list[idx_to].to_vec(coefs)
         else:
             result = coefs
 
         return result
 
     def __repr__(self):
-        return f"ConvertVecBasis({self.names}, dim={self.dim})"
+        return f"ConvertVecBasis(dim={self.dim})"

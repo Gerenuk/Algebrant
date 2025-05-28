@@ -1,6 +1,6 @@
 import itertools
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, Iterable, Self
 
 from algebrant.graded.wedge import (
     Wedge,
@@ -12,13 +12,20 @@ from algebrant.utils import calculated_field
 
 @dataclass(unsafe_hash=True, repr=False)
 class WedgeContr(Wedge):
+    @classmethod
     def lshift(
-        self, other: Self, self_factor: Any, other_factor: Any
-    ) -> dict[Self, Any]:
-        return {
-            self.__class__((LeftContraction(contr=self, base=other),)): self_factor
-            * other_factor
-        }
+        cls, basis_factor1: tuple[Self, Any], basis_factor2: tuple[Self, Any]
+    ) -> Iterable[tuple[Self, Any]]:
+        basis1, factor1 = basis_factor1
+        basis2, factor2 = basis_factor2
+        return [
+            (
+                cls(
+                    (LeftContraction(contr=basis1, base=basis2),),
+                ),
+                factor1 * factor2,
+            )
+        ]
 
 
 @dataclass(unsafe_hash=True, repr=False)
@@ -26,7 +33,7 @@ class LeftContraction(PlainReprMixin):
     contr: Wedge
     base: Wedge
     grade: int | None = calculated_field()
-    is_odd: bool | None = calculated_field()
+    is_odd: bool = calculated_field()
     wedge_sort_key: WedgeableSortKey = calculated_field()
 
     def __post_init__(self) -> None:
@@ -38,12 +45,7 @@ class LeftContraction(PlainReprMixin):
         else:
             self.grade = None
 
-        contr_is_odd = self.contr.is_odd
-        base_is_odd = self.base.is_odd
-        if contr_is_odd is not None and base_is_odd is not None:
-            self.is_odd = contr_is_odd ^ base_is_odd
-        else:
-            self.is_odd = None
+        self.is_odd = self.contr.is_odd ^ self.base.is_odd
 
         names = tuple(
             itertools.chain.from_iterable(
@@ -73,20 +75,31 @@ class LeftContraction(PlainReprMixin):
             printer.text("...")
             return
 
-        if len(self.contr.elems) >= 2:
+        if needs_parenthesis(self.contr):
             printer.text("(")
 
         printer.pretty(self.contr)
 
-        if len(self.contr.elems) >= 2:
+        if needs_parenthesis(self.contr):
             printer.text(")")
 
         printer.text("⌟")
 
-        if len(self.base.elems) >= 2:
+        if needs_parenthesis(self.base):
             printer.text("(")
 
         printer.pretty(self.base)
 
-        if len(self.base.elems) >= 2:
+        if needs_parenthesis(self.base):
             printer.text(")")
+
+
+def needs_parenthesis(elem) -> bool:
+    return (
+        isinstance(elem, Wedge)
+        and (
+            len(elem.elems) >= 2
+            or any(isinstance(e, LeftContraction) for e in elem.elems)
+        )
+        or isinstance(elem, LeftContraction)
+    )

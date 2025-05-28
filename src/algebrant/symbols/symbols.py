@@ -44,9 +44,6 @@ class Symbols(PlainReprMixin):
     def is_unity(self) -> bool:
         return not self.symbol_powers
 
-    def _new(self, symbol_powers) -> Self:
-        return dataclasses.replace(self, symbol_powers=symbol_powers)
-
     def conjugate(self, factor) -> tuple[Self, Any]:
         return (
             self._new(
@@ -63,6 +60,7 @@ class Symbols(PlainReprMixin):
         """
         return hash(frozenset(self.symbol_powers.items()))
 
+    @property
     def sort_key(self) -> BasisSortKey:
         degree = sum(abs(power) for _sym, power in self.symbol_powers.items())
         symbol_powers = sorted(
@@ -76,12 +74,13 @@ class Symbols(PlainReprMixin):
     #         self._new({sym: -power for sym, power in self.symbol_powers.items()}): 1
     #     }
 
-    def mul(self, other: Self, self_factor: Any, other_factor: Any) -> dict:
-        new_symbol_powers = Counter(self.symbol_powers)
-        new_symbol_powers.update(other.symbol_powers)
-        new_factor = self_factor * other_factor
+    @classmethod
+    def mul(cls, basis_factor1, basis_factor2):
+        new_symbol_powers = Counter(basis_factor1[0].symbol_powers)
+        new_symbol_powers.update(basis_factor2[0].symbol_powers)
+        new_factor = basis_factor1[1] * basis_factor2[1]
 
-        return {self._new(dict(new_symbol_powers)): new_factor}
+        return [(cls(dict(new_symbol_powers)), new_factor)]
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:

@@ -1,3 +1,3 @@
-from .wedge_algebra import MV, Wed
+from .wedge_algebra import MV
 
-__all__ = ["Wed", "MV"]
+__all__ = ["MV"]

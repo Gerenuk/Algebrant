@@ -15,7 +15,7 @@ except ImportError:
         return x
 
 
-@dataclass(unsafe_hash=True, order=True)
+@dataclass(unsafe_hash=True, order=True, repr=False)
 class Symbol(PlainReprMixin):
     name: str
     is_conjugate: bool = False

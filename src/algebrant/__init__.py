@@ -1,4 +1,4 @@
-from .graded import MV, Wed
+from .graded import MV
 from .symbols import Sym
 
-__all__ = ["Wed", "MV", "Sym"]
+__all__ = ["MV", "Sym"]

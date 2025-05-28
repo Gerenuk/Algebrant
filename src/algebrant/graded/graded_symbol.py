@@ -34,7 +34,7 @@ class GradedSymbol(Symbol, PlainReprMixin):
 
     base_grade: int = 0
     power: int = 1  # TODO: split into version without power?
-    is_odd: bool | None = calculated_field()
+    is_odd: bool = calculated_field()
     grade: int | None = calculated_field()
     r: tuple[Self, int] = calculated_field()
 

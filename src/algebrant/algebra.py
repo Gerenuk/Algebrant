@@ -1,3 +1,4 @@
+import functools
 import itertools
 import numbers
 from collections.abc import Callable, Iterable, Iterator
@@ -21,7 +22,7 @@ Note:
 """
 
 
-def dot_product(a, b) -> Any:
+def dot_product(a, b) -> Any:  # TODO: complex return?
     if isinstance(a, Algebra) and isinstance(
         b, Algebra
     ):  # TODO: `b` needs to be Algebra?
@@ -57,7 +58,7 @@ def _first_factor(expr):
             return 0
 
         _expr_first_basis, expr_first_factor = sorted(
-            expr.basis_factor.items(), key=lambda b_f: b_f[0].sort_key()
+            expr.basis_factor.items(), key=lambda b_f: b_f[0].sort_key
         )[0]
         factor = _first_factor(expr_first_factor)
 
@@ -66,7 +67,7 @@ def _first_factor(expr):
     return expr
 
 
-def _is_negative(val):
+def _is_negative(val) -> bool:
     """
     used to determine whether to translate "... + -a" into "... - a"
     """
@@ -84,24 +85,6 @@ def _is_negative(val):
     raise ValueError(f"Unknown type {type(val)} for is_negative")
 
 
-class CumuDict[T]:
-    def __init__(self, data: Iterable[tuple[T, Any]] | None = None) -> None:
-        self.data = {}
-
-        if data is not None:
-            for key, value in data:
-                self.add(key, value)
-
-    def add(self, key: T, value: Any) -> None:
-        if key in self.data:
-            self.data[key] += value
-        else:
-            self.data[key] = value
-
-    def to_dict(self) -> dict[T, Any]:
-        return self.data
-
-
 BasisSortKey = tuple[tuple[int, ...], tuple[str, ...]]
 
 
@@ -114,10 +97,65 @@ class BasisProtocol(Protocol):
 
     def __eq__(self, other) -> bool: ...
 
+    @property
     def sort_key(self) -> BasisSortKey: ...
 
     @property
     def is_unity(self) -> bool: ...
+
+
+A = TypeVar("A")
+
+BasisFactorPair = tuple[A, Factor]
+AlgebraIntermediate = Iterable[BasisFactorPair]
+
+
+def algebra_add(summands: AlgebraIntermediate) -> AlgebraIntermediate:
+    result_dict = {}
+
+    for basis, factor in summands:
+        if basis in result_dict:
+            result_dict[basis] += factor
+        else:
+            result_dict[basis] = factor
+
+    return [(b, f) for b, f in result_dict.items() if f != 0]
+
+
+def algebra_mul(
+    *factors: AlgebraIntermediate,
+    mul_func: Callable[[BasisFactorPair, BasisFactorPair], AlgebraIntermediate],
+) -> AlgebraIntermediate:
+    """
+    multiply all factors together
+    """
+    assert len(factors) > 0, "At least one factor is needed for multiplication"
+
+    result = algebra_add(factors[0])
+
+    for factor in factors[1:]:
+        new_result_bf = []
+        for bf1 in result:
+            for bf2 in factor:
+                new_result_bf.extend(mul_func(bf1, bf2))
+
+        result = algebra_add(new_result_bf)
+
+    return result
+
+
+def algebra_map_all_basis(
+    summands: AlgebraIntermediate,
+    func: Callable[[A], AlgebraIntermediate],
+) -> AlgebraIntermediate:
+    """
+    Apply a function to all summands
+    """
+    return algebra_add(
+        (new_basis, factor * extra_factor)
+        for basis, factor in summands
+        for new_basis, extra_factor in func(basis)
+    )
 
 
 T = TypeVar("T")
@@ -136,12 +174,12 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
 
     def __init__(
         self,
-        basis_factor: dict[T, Any],
+        basis_factor: dict[T, Factor],
         *,
         basis_class,
         op_prio=1,
         linear_func_maps=None,
-        normalize_func: Callable[[T, Type[T]], Iterable[tuple[T, Any]]] | None = None,
+        normalize_func: Callable[[Type[T], T], Iterable[tuple[T, Any]]] | None = None,
     ) -> None:
         """
         op_prio: low is highest prio; less prio will pass operation to more prio
@@ -153,11 +191,12 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
                 )
 
         if normalize_func is not None:
-            self.basis_factor: dict[T, Any] = CumuDict(
-                (new_basis, factor * extra_factor)
-                for basis, factor in basis_factor.items()
-                for new_basis, extra_factor in normalize_func(basis, basis_class)
-            ).to_dict()
+            self.basis_factor: dict[T, Any] = dict(
+                algebra_map_all_basis(
+                    basis_factor.items(),
+                    functools.partial(normalize_func, basis_class),
+                )
+            )
         else:
             self.basis_factor = basis_factor
 
@@ -180,16 +219,16 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
         )
 
     def __mul__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda b1, f1, b2, f2: b1.mul(b2, f1, f2))
+        return self._multiply(other, lambda bf1, bf2: self.basis_class.mul(bf1, bf2))
 
     def __xor__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda b1, f1, b2, f2: b1.xor(b2, f1, f2))
+        return self._multiply(other, lambda bf1, bf2: self.basis_class.xor(bf1, bf2))
 
     def __lshift__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda b1, f1, b2, f2: b1.lshift(b2, f1, f2))
+        return self._multiply(other, lambda bf1, bf2: self.basis_class.lshift(bf1, bf2))
 
     def __rshift__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda b1, f1, b2, f2: b1.rshift(b2, f1, f2))
+        return self._multiply(other, lambda bf1, bf2: self.basis_class.rshift(bf1, bf2))
 
     def _new(self, basis_factor: dict[T, Any]) -> Self:
         """
@@ -206,7 +245,7 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
     def __iter__(self) -> Iterator[tuple[T, Any]]:
         return iter(self.basis_factor.items())
 
-    def _ensure_prio(self, other: Any) -> Self:
+    def _ensure_prio(self, other: Any) -> Self | NotImplementedType:
         """
         less prio Module are rejected
         more prio
@@ -240,11 +279,13 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
 
             return NotImplemented
 
-        result_basis_factor = CumuDict(
-            itertools.chain(
-                self.basis_factor.items(), other_wrapped.basis_factor.items()
+        result_basis_factor = dict(
+            algebra_add(
+                itertools.chain(
+                    self.basis_factor.items(), other_wrapped.basis_factor.items()
+                )
             )
-        ).to_dict()
+        )
 
         return self._new(result_basis_factor)
 
@@ -299,11 +340,11 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
     def __hash__(self) -> int:
         return hash(frozenset(self.basis_factor.items()))
 
-    def __getitem__(self, basis):
-        """
-        for convenient deconstruction
-        """
-        return self.basis_factor[basis]
+    # def __getitem__(self, basis) -> Factor:
+    #     """
+    #     for convenient deconstruction
+    #     """
+    #     return self.basis_factor[basis]
 
     def _unity(self, factor: Factor) -> Self:
         """
@@ -316,7 +357,7 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
     def _zero(self) -> Self:  # rarely needed
         return self._new({})
 
-    def _repr_pretty_(self, printer, cycle, support_newlines=True):
+    def _repr_pretty_(self, printer, cycle: bool, support_newlines=True):
         if cycle:
             return printer.text("...")
 
@@ -331,7 +372,7 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
         )
 
         for i, (basis, factor) in enumerate(
-            sorted(self.basis_factor.items(), key=lambda b_f: b_f[0].sort_key())
+            sorted(self.basis_factor.items(), key=lambda b_f: b_f[0].sort_key)
         ):  # assumes basis has __lt__
             is_first_element = i == 0
 
@@ -382,9 +423,11 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
 
     def linear_func(self, func) -> Self:
         return self._new(
-            CumuDict(
-                func(basis, factor) for basis, factor in self.basis_factor.items()
-            ).to_dict()
+            dict(
+                algebra_add(
+                    func(basis, factor) for basis, factor in self.basis_factor.items()
+                )
+            )
         )
 
     def _multiply(self, other, basis_mul) -> Self | NotImplementedType:
@@ -397,17 +440,13 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
                 return other.__rmul__(self)
             return NotImplemented
 
-        try:
-            result_basis_factor = CumuDict(
-                itertools.chain.from_iterable(
-                    basis_mul(basis1, factor1, basis2, factor2).items()
-                    for (basis1, factor1), (basis2, factor2) in itertools.product(
-                        self.basis_factor.items(), other_wrapped.basis_factor.items()
-                    )
-                )
-            ).to_dict()
-        except TypeError:  # TODO: hides some errors?
-            return NotImplemented
+        result_basis_factor = dict(
+            algebra_mul(
+                self.basis_factor.items(),
+                other_wrapped.basis_factor.items(),
+                mul_func=basis_mul,
+            )
+        )
 
         result = self._new(result_basis_factor)
 
@@ -476,7 +515,7 @@ def _repr_needs_parenthesis(factor) -> bool:
     return False
 
 
-def _is_long_repr(basis_factor) -> bool:
+def _is_long_repr(basis_factor: dict) -> bool:
     result = len(basis_factor) > MAX_ONE_LINE_ELEM or any(
         isinstance(factor, Algebra) and _is_long_repr(factor.basis_factor)
         for factor in basis_factor.values()

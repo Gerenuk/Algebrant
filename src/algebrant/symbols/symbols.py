@@ -1,34 +1,19 @@
-import dataclasses
-from collections import Counter
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Self
+from typing import Any, Self, TypeVar
 
-from algebrant.algebra import BasisSortKey
+from algebrant.algebra.algebra import BasisSortKey
 from algebrant.repr_printer import PlainReprMixin
 from algebrant.symbols.symbol import Symbol
 
-
-def symbol_sort_key(symbol):
-    match symbol:
-        case Symbol(name, is_conjugate):
-            key = (0, name, is_conjugate)
-        # case DerivSymbol(symbol, _, derivativates): # TODO: add somewhere without dependencies
-        #    key = (1, bool(derivativates), symbol.name)  # TODO: more specific order?
-        case _:
-            raise ValueError(f"Unknown symbol {symbol} of type {type(symbol)}")
-
-    return key
+SymbolType = TypeVar("SymbolType", bound=Symbol)
 
 
 @dataclass(repr=False)
-class Symbols(PlainReprMixin):
-    symbol_powers: dict[Symbol, Any]  # TODO: int?
+class Symbols[SymbolType](PlainReprMixin):
+    symbol_powers: dict[SymbolType, Any]  # TODO: int?
 
     def __post_init__(self) -> None:
-        if any(not isinstance(sym, Symbol) for sym in self.symbol_powers.keys()):
-            raise TypeError("All keys must be instances of Symbol")
-
         if any(x == 0 for x in self.symbol_powers.values()):
             self.symbol_powers = {
                 symbol: power
@@ -63,24 +48,20 @@ class Symbols(PlainReprMixin):
     @property
     def sort_key(self) -> BasisSortKey:
         degree = sum(abs(power) for _sym, power in self.symbol_powers.items())
-        symbol_powers = sorted(
-            (symbol_sort_key(sym), -power) for sym, power in self.symbol_powers.items()
+        sorted_symbols = sorted(
+            self.symbol_powers.keys(), key=lambda x: (x.name, x.is_conjugate)
         )
 
-        return ((degree,), symbol_powers)
+        return (
+            (degree, len(self.symbol_powers))
+            + tuple(self.symbol_powers[sym] for sym in sorted_symbols),
+            tuple(sym.name for sym in sorted_symbols),
+        )
 
     # def inverse(self):
     #     return {
     #         self._new({sym: -power for sym, power in self.symbol_powers.items()}): 1
     #     }
-
-    @classmethod
-    def mul(cls, basis_factor1, basis_factor2):
-        new_symbol_powers = Counter(basis_factor1[0].symbol_powers)
-        new_symbol_powers.update(basis_factor2[0].symbol_powers)
-        new_factor = basis_factor1[1] * basis_factor2[1]
-
-        return [(cls(dict(new_symbol_powers)), new_factor)]
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:
@@ -92,7 +73,7 @@ class Symbols(PlainReprMixin):
             return
 
         for i, (symbol, count) in enumerate(
-            sorted(self.symbol_powers.items(), key=lambda s_p: symbol_sort_key(s_p[0]))
+            sorted(self.symbol_powers.items(), key=lambda s_p: s_p[0].name)  # TODO
         ):
             if i > 0:
                 printer.text(" ")

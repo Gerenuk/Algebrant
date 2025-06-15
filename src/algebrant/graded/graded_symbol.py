@@ -1,9 +1,10 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Protocol, Self
+from typing import Self
 
 import colorful as cf
 
+from algebrant.graded.graded_protocol import GradedProtocol
 from algebrant.repr_printer import PlainReprMixin
 from algebrant.symbols.symbol import Symbol
 from algebrant.utils import all_not_none, calculated_field
@@ -12,12 +13,7 @@ vector_color = cf.yellow  # type: ignore
 multivector_color = cf.orange  # type: ignore
 
 
-class Graded(Protocol):
-    @property
-    def grade(self) -> int | None: ...
-
-
-def get_valid_grades(elems: Iterable[Graded]) -> Sequence[int] | None:
+def get_valid_grades(elems: Iterable[GradedProtocol]) -> Sequence[int] | None:
     grades = [elem.grade for elem in elems]
 
     if not all_not_none(grades):

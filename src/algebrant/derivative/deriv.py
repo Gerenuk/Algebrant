@@ -1,8 +1,8 @@
 from collections import Counter
 from numbers import Number
 
-from ..algebra import Algebra
-from ..clifford.clifford import CliffordBasis
+from ..algebra.algebra import Algebra
+from ..clifford.clifford_basis import CliffordBasis
 from .deriv_symbol import DerivSymbol
 from .symbol import Symbol
 from ..symbols import Symbols

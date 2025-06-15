@@ -2,10 +2,10 @@ import itertools
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterable, Protocol, Self
 
-from algebrant.algebra import BasisSortKey
+from algebrant.algebra.algebra import BasisSortKey
 from algebrant.graded.graded_symbol import GradedSymbol, get_valid_grades
 from algebrant.repr_printer import PlainReprMixin
-from algebrant.utils import all_not_none, calculated_field
+from algebrant.utils import calculated_field
 
 WedgeableSortKey = tuple[tuple[int, ...], tuple[str, ...]]
 

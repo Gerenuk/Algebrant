@@ -4,14 +4,14 @@ from abc import abstractmethod
 from math import prod
 from typing import Any, Self
 
-from algebrant.algebra import BasisProtocol, CumuDict, Factor
+from algebrant.algebra.algebra import BasisProtocol, Factor
 from algebrant.common import is_zero
 
 
-class ArithmeticMixin:
+class MultiplicationMixin:
     # TODO: need to declare that __mul__ and __add__ are required?
 
-    def __pow__(self, power: int) -> Self | int:
+    def __pow__(self, power: int) -> Self:
         if not isinstance(power, int):
             raise ValueError(f"Cannot pow by {power}. Only integers implemented.")
 
@@ -30,6 +30,7 @@ class ArithmeticMixin:
         """
         Only works if invertible
         """
+        # TODO: use Quotient?
         return self * (1 / other)
 
     @abstractmethod

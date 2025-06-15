@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from itertools import groupby
 from operator import attrgetter
 
-from .algebra import Algebra
-from .nc_symbols import NCSymbols
+from .algebra.algebra import Algebra
+from .symbols.nc_symbols import NCSymbols
 from .symbol import Symbol
 
 

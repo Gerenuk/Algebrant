@@ -1,15 +1,22 @@
-import functools
-import itertools
 import numbers
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable
 from types import NotImplementedType
-from typing import Any, Protocol, Self, Type, TypeVar
+from typing import Any, Protocol, Self, TypeVar
 
 import numpy as np
 
-from .common import is_identity
-from .display_config import MAX_ONE_LINE_ELEM
-from .repr_printer import PlainReprMixin
+from algebrant.algebra.operations import (
+    AlgebraData,
+    algebra_add,
+    algebra_map,
+    algebra_map_basis,
+    algebra_maps_basisfactor,
+    algebra_mul,
+)
+
+from ..common import is_identity
+from ..display_config import MAX_ONE_LINE_ELEM
+from ..repr_printer import PlainReprMixin
 
 """
 Module implemented with a basis to be able to compare elements
@@ -47,9 +54,6 @@ def dot_product(a, b) -> Any:  # TODO: complex return?
         return np.sum(a.conjugate() * b)
 
     raise ValueError(f"Do not know not how to dot {type(a)} and {type(b)}")
-
-
-Factor = Any  # TODO
 
 
 def _first_factor(expr):
@@ -104,64 +108,13 @@ class BasisProtocol(Protocol):
     def is_unity(self) -> bool: ...
 
 
-A = TypeVar("A")
-
-BasisFactorPair = tuple[A, Factor]
-AlgebraIntermediate = Iterable[BasisFactorPair]
-
-
-def algebra_add(summands: AlgebraIntermediate) -> AlgebraIntermediate:
-    result_dict = {}
-
-    for basis, factor in summands:
-        if basis in result_dict:
-            result_dict[basis] += factor
-        else:
-            result_dict[basis] = factor
-
-    return [(b, f) for b, f in result_dict.items() if f != 0]
+Factor = Any  # TODO
+Basis = TypeVar("Basis")
+BasisFactor = tuple[Basis, Factor]
+BasisFactorDict = dict[Basis, Factor]
 
 
-def algebra_mul(
-    *factors: AlgebraIntermediate,
-    mul_func: Callable[[BasisFactorPair, BasisFactorPair], AlgebraIntermediate],
-) -> AlgebraIntermediate:
-    """
-    multiply all factors together
-    """
-    assert len(factors) > 0, "At least one factor is needed for multiplication"
-
-    result = algebra_add(factors[0])
-
-    for factor in factors[1:]:
-        new_result_bf = []
-        for bf1 in result:
-            for bf2 in factor:
-                new_result_bf.extend(mul_func(bf1, bf2))
-
-        result = algebra_add(new_result_bf)
-
-    return result
-
-
-def algebra_map_all_basis(
-    summands: AlgebraIntermediate,
-    func: Callable[[A], AlgebraIntermediate],
-) -> AlgebraIntermediate:
-    """
-    Apply a function to all summands
-    """
-    return algebra_add(
-        (new_basis, factor * extra_factor)
-        for basis, factor in summands
-        for new_basis, extra_factor in func(basis)
-    )
-
-
-T = TypeVar("T")
-
-
-class Algebra[T: BasisProtocol](PlainReprMixin):
+class Algebra[Basis: BasisProtocol](PlainReprMixin):
     """
     Algebra with a basis
 
@@ -174,12 +127,10 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
 
     def __init__(
         self,
-        basis_factor: dict[T, Factor],
+        basis_factor: BasisFactorDict,
         *,
         basis_class,
         op_prio=1,
-        linear_func_maps=None,
-        normalize_func: Callable[[Type[T], T], Iterable[tuple[T, Any]]] | None = None,
     ) -> None:
         """
         op_prio: low is highest prio; less prio will pass operation to more prio
@@ -190,60 +141,25 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
                     f"One basis class in basis_factor is {key.__class__}, but should be {basis_class}"
                 )
 
-        if normalize_func is not None:
-            self.basis_factor: dict[T, Any] = dict(
-                algebra_map_all_basis(
-                    basis_factor.items(),
-                    functools.partial(normalize_func, basis_class),
-                )
-            )
-        else:
-            self.basis_factor = basis_factor
-
+        self.basis_factor = basis_factor
         self.basis_class = basis_class
         self.unity_basis = basis_class.unity()
         self.op_prio = op_prio
-        self.linear_func_maps = linear_func_maps if linear_func_maps is not None else {}
-        self.normalize_func = normalize_func
 
-    def __getattr__(self, attr) -> Any:  # TODO: not Any
-        """
-        allows to call functions on the basis
-        """
-        if attr in self.linear_func_maps:
-            func = self.linear_func_maps[attr]
-            return lambda: self.linear_func(func)
-
-        raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute '{attr}'"
-        )
-
-    def __mul__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda bf1, bf2: self.basis_class.mul(bf1, bf2))
-
-    def __xor__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda bf1, bf2: self.basis_class.xor(bf1, bf2))
-
-    def __lshift__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda bf1, bf2: self.basis_class.lshift(bf1, bf2))
-
-    def __rshift__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, lambda bf1, bf2: self.basis_class.rshift(bf1, bf2))
-
-    def _new(self, basis_factor: dict[T, Any]) -> Self:
+    def _new(self, basis_factor: BasisFactorDict) -> Self:
         """
         used to create results with appropriate initialization of the same properties
         """
         return self.__class__(  # TODO: generalize?
-            basis_factor=basis_factor,
+            basis_factor={
+                basis: factor for basis, factor in basis_factor.items() if factor != 0
+            },
             basis_class=self.basis_class,
             op_prio=self.op_prio,
-            linear_func_maps=self.linear_func_maps,
-            normalize_func=self.normalize_func,
         )
 
-    def __iter__(self) -> Iterator[tuple[T, Any]]:
-        return iter(self.basis_factor.items())
+    def to_list(self) -> list[tuple[Basis, Any]]:
+        return list(self.basis_factor.items())
 
     def _ensure_prio(self, other: Any) -> Self | NotImplementedType:
         """
@@ -280,31 +196,27 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
             return NotImplemented
 
         result_basis_factor = dict(
-            algebra_add(
-                itertools.chain(
-                    self.basis_factor.items(), other_wrapped.basis_factor.items()
-                )
-            )
+            algebra_add(self.basis_factor.items(), other_wrapped.basis_factor.items())
         )
 
         return self._new(result_basis_factor)
 
-    def __radd__(self, other) -> Self:
-        return self + other
+    def __radd__(self, first: Any) -> Self:
+        return self + first
 
-    def __rmul__(self, other: Factor) -> Self:
+    def __rmul__(self, first: Factor) -> Self:
         """
         other is left-multiplied
         for algebra multiplication implement __mul__
         """
-        if other == 1:
+        if first == 1:
             return self
 
-        if other == 0:
+        if first == 0:
             return self._zero()
 
         basis_factor = {
-            basis: other * factor for basis, factor in self.basis_factor.items()
+            basis: first * factor for basis, factor in self.basis_factor.items()
         }
 
         return self._new(basis_factor)
@@ -320,7 +232,7 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
     def __rsub__(self, first) -> Self:
         return first + (-self)
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other) -> bool:  # TODO: check
         if other == 0:
             return not self.basis_factor
 
@@ -339,12 +251,6 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
 
     def __hash__(self) -> int:
         return hash(frozenset(self.basis_factor.items()))
-
-    # def __getitem__(self, basis) -> Factor:
-    #     """
-    #     for convenient deconstruction
-    #     """
-    #     return self.basis_factor[basis]
 
     def _unity(self, factor: Factor) -> Self:
         """
@@ -385,12 +291,12 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
             if multi_line:
                 if is_first_element:
                     printer.text("  " if not neg_sign else " -")
-                    printer.begin_group(2)
+                    printer.begin_group(2, "")  # TODO: ?
                 else:
-                    printer.end_group(2)
+                    printer.end_group(2, "")
                     printer.break_()
                     printer.text("+ " if not neg_sign else "- ")
-                    printer.begin_group(2)
+                    printer.begin_group(2, "")
             else:
                 if is_first_element:
                     printer.text("" if not neg_sign else "-")
@@ -419,38 +325,84 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
                 printer.pretty(basis)
 
         if multi_line:
-            printer.end_group(2)
+            printer.end_group(2, "")  # TODO?
 
-    def linear_func(self, func) -> Self:
+    def linear_func(self, func: Callable[[tuple[Basis, Factor]], AlgebraData]) -> Self:
+        return self._new(dict(algebra_map(self.basis_factor.items(), func)))
+
+    def basis_factor_pairs(self, other: Self) -> dict[Basis, tuple[Factor, Factor]]:
+        return {
+            basis: (self.basis_factor[basis], other.basis_factor[basis])
+            for basis in self.basis_factor.keys() & other.basis_factor.keys()
+        }
+
+    def map_basis(self, func: Callable[[Basis], AlgebraData]) -> Self:
+        return self._new(dict(algebra_map_basis(self.basis_factor.items(), func)))
+
+    def map_basisfactor(self, func: Callable[[BasisFactor], AlgebraData]) -> Self:
         return self._new(
-            dict(
-                algebra_add(
-                    func(basis, factor) for basis, factor in self.basis_factor.items()
-                )
-            )
+            dict(algebra_maps_basisfactor(self.basis_factor.items(), func))
         )
 
-    def _multiply(self, other, basis_mul) -> Self | NotImplementedType:
+    def _mul(self, bf1: BasisFactor, bf2: BasisFactor) -> Iterable[BasisFactor]:
+        basis1, factor1 = bf1
+        basis2, factor2 = bf2
+
+        if basis1.is_unity:
+            return [(basis2, factor1 * factor2)]
+
+        if basis2.is_unity and isinstance(factor2, numbers.Number):
+            return [(basis1, factor1 * factor2)]
+
+        raise NotImplementedError()
+
+    def __mul__(self, other: Any) -> Self | NotImplementedType:
+        return self._multiply(other, self._mul)
+
+    def _multiply(
+        self,
+        other: Any,
+        basis_mul: Callable[[BasisFactor, BasisFactor], Iterable[BasisFactor]],
+    ) -> Self | NotImplementedType:
         other_wrapped = self._ensure_prio(other)
 
         if other_wrapped is NotImplemented:
             if isinstance(
                 other, self.__class__
-            ):  # because same class __radd__ would not be called due to Python
+            ):  # TODO: ? because same class __radd__ would not be called due to Python
                 return other.__rmul__(self)
             return NotImplemented
 
-        result_basis_factor = dict(
-            algebra_mul(
-                self.basis_factor.items(),
-                other_wrapped.basis_factor.items(),
-                mul_func=basis_mul,
+        # print(f"Called from {self.__class__=} {self=} {other=}")
+
+        try:
+            result_basis_factor = dict(
+                algebra_mul(
+                    self.basis_factor.items(),
+                    other_wrapped.basis_factor.items(),
+                    mul_func=basis_mul,
+                )
             )
-        )
+        except NotImplementedError:
+            # print("NotImplemented")
+            return NotImplemented
 
         result = self._new(result_basis_factor)
 
+        # print(f"{result=}")
+
         return result
+
+    def __truediv__(self, other: Any) -> Self | NotImplementedType:
+        if isinstance(other, numbers.Number):
+            return self._new(
+                {
+                    basis: factor * (1 / other)
+                    for basis, factor in self.basis_factor.items()
+                }
+            )
+
+        return NotImplemented
 
     # def __mul__(self, other: Self) -> Self:
     #     """
@@ -500,6 +452,21 @@ class Algebra[T: BasisProtocol](PlainReprMixin):
         return sum(
             dot_product(self.basis_factor[key], other_wrapped.basis_factor[key])
             for key in self.basis_factor.keys() & other_wrapped.basis_factor.keys()
+        )
+
+    def __abs__(self) -> Factor:
+        """
+        topological abs which looks only at coefficents
+        """
+        return sum(abs(factor) for factor in self.basis_factor.values())
+
+    def filter(self, func: Callable[[Basis, Factor], bool]) -> Self:
+        return self._new(
+            {
+                basis: factor.filter(func) if isinstance(factor, Algebra) else factor
+                for basis, factor in self.basis_factor.items()
+                if func(basis, factor)
+            }
         )
 
 

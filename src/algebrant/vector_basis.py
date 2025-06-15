@@ -17,7 +17,7 @@ TODO:
 
 
 class VecBasis:
-    def __init__(self, basis_vecs, *, dot, names=None, min_abs=1e-15):
+    def __init__(self, basis_vecs, *, dot, names=None, min_abs=1e-8) -> None:
         """
         basis_vecs need only scalar multiplication and the provided dot function
         dot non-degenerate, but not necessarily symmetric (e.g. lambda a, b: a @ T @ b)
@@ -81,11 +81,14 @@ class VecBasis:
         if verify:
             elem_from_coef = self.to_vec(coefs)
 
+            abs_val = None
+
             if isinstance(elem_from_coef, np.ndarray):
                 is_equal = np.all(np.isclose(elem_from_coef, vec))
             else:
                 try:
-                    is_equal = abs(elem_from_coef - vec) < self.min_abs
+                    abs_val = abs(elem_from_coef - vec)
+                    is_equal = abs_val < self.min_abs
                 except TypeError:
                     is_equal = elem_from_coef == vec
 
@@ -96,7 +99,9 @@ class VecBasis:
 
             if not is_equal:
                 raise ValueError(
-                    f"Missing basis for coefs {coefs}:\n{vec - elem_from_coef}\n=\n {vec} (orig)\n-\n{elem_from_coef} (calc)"
+                    f"Missing basis for coefs {coefs}:\ndiff"
+                    + (f" abs {abs_val}" if abs_val is not None else "")
+                    + f" =\n{vec - elem_from_coef}\n=\n {vec} (orig)\n-\n{elem_from_coef} (calc)"
                 )
 
         return coefs

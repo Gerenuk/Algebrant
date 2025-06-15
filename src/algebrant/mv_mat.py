@@ -4,10 +4,10 @@ from math import prod
 
 import numpy as np
 
-from algebrant.algebra import dot_product
-from algebrant.clifford.clifford import cl_dot
+from algebrant.algebra.algebra import dot_product
+from algebrant.clifford.clifford_basis import cl_dot
 
-from .creation import E
+from ...archive.creation import E
 from .vector_basis import ConvertVecBasis, VecBasis
 
 Paulis = [

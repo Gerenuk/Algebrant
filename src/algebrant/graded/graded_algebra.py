@@ -1,14 +1,24 @@
 import types
-from typing import Self
+from typing import Self, TypeVar
 
-from algebrant.algebra import Algebra
-from algebrant.graded.graded_symbol import Graded
+from algebrant.algebra.algebra import Algebra
+
+GradedBasis = TypeVar("GradedBasis")
 
 
-class GradedAlgebra(Algebra[Graded]):
+class GradedAlgebra[GradedBasis](Algebra):
     """
     basis elements must be CliffordBases with tuples
     """
+
+    @staticmethod
+    def _basis_factor_conjugate(basis_factor):
+        basis, factor = basis_factor
+
+        if hasattr(factor, "vector_conjugate") and basis.is_odd:
+            return (basis, factor.vector_conjugate)
+
+        return (basis, factor)
 
     @property
     def i(self) -> Self:
@@ -17,7 +27,12 @@ class GradedAlgebra(Algebra[Graded]):
 
         satisfies (A * B).i = A.i * B.i
         """
-        return self.flip_grade_signs(lambda x: x % 2 == 1)
+        return self.map_basisfactor(
+            lambda bf: [
+                (basis, bf[1].i * extra_factor) for basis, extra_factor in [bf[0].i]
+            ]
+        )
+        # return self.flip_grade_signs(lambda x: x % 2 == 1)
 
     @property
     def r(self) -> Self:
@@ -29,7 +44,12 @@ class GradedAlgebra(Algebra[Graded]):
 
         A*A.r cannot have grades 4k+{2,3}
         """
-        return self.flip_grade_signs(lambda x: x % 4 in (2, 3))
+        return self.map_basisfactor(
+            lambda bf: [
+                self._basis_factor_conjugate((basis, bf[1].r * extra_factor))
+                for basis, extra_factor in [bf[0].r]
+            ]
+        )
 
     @property
     def cl(self) -> Self:
@@ -41,17 +61,12 @@ class GradedAlgebra(Algebra[Graded]):
 
         A*A.c cannot have grades 4k+{1,2}
         """
-        return self.flip_grade_signs(lambda x: x % 4 in (1, 2))
-
-    def flip_grade_signs(self, sign_flip_condition) -> Self:
-        basis_factor = {}
-        for basis, factor in self.basis_factor.items():
-            if sign_flip_condition(basis.grade):
-                factor = -factor
-
-            basis_factor[basis] = factor
-
-        return self._new(basis_factor)
+        return self.map_basisfactor(
+            lambda bf: [
+                self._basis_factor_conjugate((basis, bf[1].cl * extra_factor))
+                for basis, extra_factor in [bf[0].cl]
+            ]
+        )
 
     def take_grades(self, *grades) -> Self:
         if grades and isinstance(grades[0], types.FunctionType):

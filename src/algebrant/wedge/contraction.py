@@ -1,31 +1,12 @@
 import itertools
 from dataclasses import dataclass
-from typing import Any, Iterable, Self
 
-from algebrant.graded.wedge import (
+from algebrant.wedge.wedge import (
     Wedge,
     WedgeableSortKey,
 )
 from algebrant.repr_printer import PlainReprMixin
 from algebrant.utils import calculated_field
-
-
-@dataclass(unsafe_hash=True, repr=False)
-class WedgeContr(Wedge):
-    @classmethod
-    def lshift(
-        cls, basis_factor1: tuple[Self, Any], basis_factor2: tuple[Self, Any]
-    ) -> Iterable[tuple[Self, Any]]:
-        basis1, factor1 = basis_factor1
-        basis2, factor2 = basis_factor2
-        return [
-            (
-                cls(
-                    (LeftContraction(contr=basis1, base=basis2),),
-                ),
-                factor1 * factor2,
-            )
-        ]
 
 
 @dataclass(unsafe_hash=True, repr=False)

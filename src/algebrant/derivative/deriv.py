@@ -3,9 +3,9 @@ from numbers import Number
 
 from ..algebra.algebra import Algebra
 from ..clifford.clifford_basis import CliffordBasis
+from ..symbols import Symbols
 from .deriv_symbol import DerivSymbol
 from .symbol import Symbol
-from ..symbols import Symbols
 
 
 def deriv(term: Algebra | Number, param: str):
@@ -30,13 +30,9 @@ def deriv(term: Algebra | Number, param: str):
                     match symbol:
                         case Symbol(name) if name == param:
                             new_symbol_powers = (
-                                symbol_powers[:i]
-                                + [(symbol, power - 1)]
-                                + symbol_powers[i + 1 :]
+                                symbol_powers[:i] + [(symbol, power - 1)] + symbol_powers[i + 1 :]
                             )
-                            new_part = term._new(
-                                {Symbols(new_symbol_powers): factor * power}
-                            )
+                            new_part = term._new({Symbols(new_symbol_powers): factor * power})
                             result_terms.append(new_part)
                         case DerivSymbol(deriv_symbol, parameters, derivatives) if (
                             not parameters or param in parameters
@@ -60,11 +56,7 @@ def deriv(term: Algebra | Number, param: str):
                             new_symbol_powers[new_deriv_symbol] += 1
 
                             new_part = term._new(
-                                {
-                                    Symbols(
-                                        frozenset(new_symbol_powers.items())
-                                    ): factor * power
-                                }
+                                {Symbols(frozenset(new_symbol_powers.items())): factor * power}
                             )
                             result_terms.append(new_part)
                         case _:

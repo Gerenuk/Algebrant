@@ -3,8 +3,8 @@ from itertools import groupby
 from operator import attrgetter
 
 from .algebra.algebra import Algebra
-from .symbols.nc_symbols import NCSymbols
 from .symbol import Symbol
+from .symbols.nc_symbols import NCSymbols
 
 
 @dataclass(unsafe_hash=True, order=True, repr=False)
@@ -68,7 +68,9 @@ class NullVectorSymbols(NCSymbols):
     def conjugate(self, factor):
         reversed_symbols, factor_sign = _reverse_symbols(self.symbols)
 
-        return self._create(tuple(sym.conjugate() for sym in reversed_symbols)), factor.conjugate() * factor_sign
+        return self._create(
+            tuple(sym.conjugate() for sym in reversed_symbols)
+        ), factor.conjugate() * factor_sign
 
     def r(self, factor):
         """
@@ -155,7 +157,9 @@ class NullVectorSymbols(NCSymbols):
                 both_symbols = self_symbols + other_symbols
 
                 while len(both_symbols) >= 3 and (  # Combine A* A A* or A A* A
-                    both_symbols[0].is_conjugate == (not both_symbols[1].is_conjugate) == both_symbols[2].is_conjugate
+                    both_symbols[0].is_conjugate
+                    == (not both_symbols[1].is_conjugate)
+                    == both_symbols[2].is_conjugate
                 ):
                     both_symbols = both_symbols[2:]
 

@@ -5,9 +5,7 @@ from typing import Sequence, TypeVar
 import numpy as np
 
 
-def random_coef(
-    dim, *, complex=True, int_only=False, min_int=2, max_int=1000
-) -> np.ndarray:
+def random_coef(dim, *, complex=True, int_only=False, min_int=2, max_int=1000) -> np.ndarray:
     match complex, int_only:
         case True, True:
             result = np.random.choice([1, -1], size=dim) * np.random.randint(
@@ -20,9 +18,7 @@ def random_coef(
             result = np.random.normal(size=dim) + 1j * np.random.normal(size=dim)
 
         case False, True:
-            result = np.random.choice([1, -1], size=dim) * np.random.randint(
-                min_int, max_int
-            )
+            result = np.random.choice([1, -1], size=dim) * np.random.randint(min_int, max_int)
 
         case False, False:
             result = np.random.normal(size=dim)

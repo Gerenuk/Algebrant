@@ -19,7 +19,9 @@ class DerivSymbol(BaseSymbol):
 
     def __post_init__(self):
         self.parameters = tuple(sorted(self.parameters))
-        self.derivatives = tuple(sorted((name, count) for name, count in self.derivatives if count != 0))
+        self.derivatives = tuple(
+            sorted((name, count) for name, count in self.derivatives if count != 0)
+        )
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:
@@ -57,7 +59,9 @@ class DerivSymbol(BaseSymbol):
     def __repr__(self):
         result = [
             "D" if self.derivatives else "",
-            ",".join(f"{param}" + (f"{order}" if order != 1 else "") for param, order in self.derivatives),
+            ",".join(
+                f"{param}" + (f"{order}" if order != 1 else "") for param, order in self.derivatives
+            ),
             self.symbol.name,
             "(",
             ",".join(f"{param}" for param in self.parameters),

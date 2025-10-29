@@ -5,9 +5,10 @@ from math import prod
 import numpy as np
 
 from algebrant.algebra.algebra import dot_product
-from algebrant.clifford.clifford_basis import cl_dot
+from algebrant.clifford.cl_utils import cl_dot
+from algebrant.clifford.clalg import ClAlg
+from algebrant.clifford.clifford_algebra import Cl_vec
 
-from ...archive.creation import E
 from .vector_basis import ConvertVecBasis, VecBasis
 
 Paulis = [
@@ -61,14 +62,14 @@ def make_cl_mats(dim: int):
 
 def make_cl_vec_basis_from_dim(dim, start_idx=1):
     return VecBasis(
-        grade_1_to_all(range(start_idx, start_idx + dim), create_func=lambda x: E(*x)),
+        grade_1_to_all(range(start_idx, start_idx + dim), create_func=lambda x: Cl_vec(*x)),
         dot=cl_dot,
     )
 
 
 def make_cl_vec_basis_from_vec(basis_vecs):
     return VecBasis(
-        grade_1_to_all(basis_vecs, create_func=lambda x: prod(x) if x else E()),
+        grade_1_to_all(basis_vecs, create_func=lambda x: prod(x) if x else Cl_vec()),
         dot=cl_dot,
     )
 
@@ -91,7 +92,7 @@ def make_mat_vec_basis_from_mats(vec_mats):
 def validate_cl_mats(cl_bases, mat_bases):
     # validate matrices
     for i, (base, mat) in enumerate(zip(cl_bases, mat_bases)):
-        base_sqr = (base**2).scalar_part  # TODO
+        base_sqr = (base**2).scalar  # TODO
         mat_sqr = mat @ mat
 
         if not np.all(base_sqr * np.eye(mat.shape[0]) == mat_sqr):
@@ -118,16 +119,36 @@ class ClMat:
         m_basis = make_mat_vec_basis_from_mats(vec_mats)
         self.convert = ConvertVecBasis(c_basis, m_basis)
 
-    def to_mat(self, elem):
-        return self.convert(elem, 0, 1)
+    def to_mat(self, elem, **params):
+        return self.convert(elem, 0, 1, **params)
 
-    def to_cl(self, elem):
-        return self.convert(elem, 1, 0)
+    def to_cl(self, elem, **params):
+        return self.convert(elem, 1, 0, **params)
 
     @classmethod
     def from_dim(cls, dim):
         mats = make_cl_mats(dim)
-        return cls(mats, [E(i + 1) for i in range(dim)])
+        return cls(mats, [Cl_vec(i + 1) for i in range(dim)])
 
     def __repr__(self):
         return f"ClMat({self.dim})"
+
+
+def clalg_mat_conv(clalg: ClAlg, *, mats=None) -> ClMat:
+    bases = clalg.get_bases(1)
+
+    if mats is None:
+        mats0 = make_anti_comm_mats((len(bases) + 1) // 2)
+
+        mats = []
+        for base, mat in zip(bases, mats0):
+            if base**2 == 1:
+                mats.append(mat)
+            elif base**2 == -1:
+                mats.append(1j * mat)
+            else:
+                raise ValueError(f"Base {base} not supported")
+    else:
+        validate_cl_mats(bases, mats)
+
+    return ClMat(vec_mats=mats, vec_cls=bases)

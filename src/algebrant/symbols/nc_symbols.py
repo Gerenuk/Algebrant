@@ -1,9 +1,9 @@
 import dataclasses
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Self, TypeVar
 
-from algebrant.algebra.algebra import BasisSortKey
+from algebrant.algebra.basis import BasisSortKey
 from algebrant.repr_printer import PlainReprMixin
 
 Symbol = TypeVar("Symbol")
@@ -11,7 +11,7 @@ Symbol = TypeVar("Symbol")
 
 @dataclass(unsafe_hash=True, repr=False)  # TODO: not dataclass?
 class NCSymbols[Symbol](PlainReprMixin):
-    symbols: tuple[Symbol, ...]
+    symbols: tuple[Symbol, ...] = field(default_factory=tuple)
 
     @classmethod
     def unity(cls) -> Self:
@@ -41,6 +41,7 @@ class NCSymbols[Symbol](PlainReprMixin):
             return
 
         for i, (symbol, group) in enumerate(itertools.groupby(self.symbols)):
+            # compress consecutive NCSymbols by power display
             count = len(list(group))
 
             if i > 0:

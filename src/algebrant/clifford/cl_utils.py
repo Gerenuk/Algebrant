@@ -1,9 +1,18 @@
 import itertools
 
 
+def conjugate(value):
+    if isinstance(value, (int, float)):
+        return value
+    elif hasattr(value, "conjugate"):
+        return value.conjugate()
+    else:
+        raise TypeError(f"Unsupported type for conjugation: {type(value)}")
+
+
 def cl_dot(a, b):
-    factors_a = a.basis_factor
-    factors_b = b.basis_factor
+    factors_a = a.basis_factor.to_dict
+    factors_b = b.basis_factor.to_dict
     return sum(
         conjugate(factors_a[basis]) * factors_b[basis]
         for basis in factors_a.keys() & factors_b.keys()

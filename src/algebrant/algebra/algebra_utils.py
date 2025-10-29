@@ -1,11 +1,17 @@
 import itertools
 import numbers
-from abc import abstractmethod
-from math import prod
+import operator
+from functools import reduce, singledispatch
 from typing import Any, Self
 
 from algebrant.algebra.algebra import BasisProtocol, Factor
+from algebrant.algebra.algebra_data import AlgebraData
 from algebrant.common import is_zero
+
+
+@singledispatch
+def invert_basis[Basis: BasisProtocol](basis: Basis) -> dict[Basis, Any]:
+    raise NotImplementedError(f"inverse not implemented for basis type {type(basis)}")
 
 
 class MultiplicationMixin:
@@ -16,11 +22,11 @@ class MultiplicationMixin:
             raise ValueError(f"Cannot pow by {power}. Only integers implemented.")
 
         if power == 0:
-            return 1  # assumes 1 is a valid element of the algebra
+            return self._unity(1)
         elif power >= 1:
-            result = prod(itertools.repeat(self, power))
+            result = reduce(operator.mul, itertools.repeat(self, power))
         elif power <= -1:
-            result = prod(itertools.repeat(1 / self, abs(power)))
+            result = reduce(operator.mul, itertools.repeat(1 / self, abs(power)))
         else:
             raise ValueError(f"Power {power} not recognized")
 
@@ -30,12 +36,20 @@ class MultiplicationMixin:
         """
         Only works if invertible
         """
-        # TODO: use Quotient?
         return self * (1 / other)
 
-    @abstractmethod
     def __rtruediv__(self, numer: Factor) -> Self:
-        raise NotImplementedError("__rtruediv__ not implemented")
+        if numer == 1 and len(self.basis_factor) == 1:
+            basis, factor = next(iter(self.basis_factor))
+
+            try:
+                inverse_basis = AlgebraData(invert_basis(basis))
+
+                return self._new(inverse_basis) * self._unity(1 / factor)
+            except NotImplementedError:
+                pass
+
+        return NotImplemented
 
 
 def clip_small(basis_factor, *, clip_small: float) -> dict[BasisProtocol, Any]:

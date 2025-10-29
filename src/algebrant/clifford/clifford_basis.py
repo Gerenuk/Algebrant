@@ -1,8 +1,9 @@
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Self
 
-from algebrant.algebra.algebra import BasisSortKey
+from algebrant.algebra.basis import BasisSortKey
 from algebrant.clifford.clifford_basis_vec import CliffordBasisVec
 from algebrant.repr_printer import PlainReprMixin
 from algebrant.utils import calculated_field
@@ -17,9 +18,7 @@ Todos (some old?):
 
 @dataclass(unsafe_hash=True, repr=False)
 class CliffordBasis(PlainReprMixin):
-    bases: tuple[
-        CliffordBasisVec, ...
-    ]  # needs to be sorted (or will be sorted by force)
+    bases: tuple[CliffordBasisVec, ...]  # needs to be sorted (or will be sorted by force)
     sort_key: BasisSortKey = calculated_field()
     is_unity: bool = calculated_field()
     grade: int = calculated_field()
@@ -33,9 +32,7 @@ class CliffordBasis(PlainReprMixin):
         self.sort_key = ((len(self.bases),), tuple(b.name for b in self.bases))
         self.is_unity = self.bases == tuple()
         self.grade = len(self.bases)
-        self.sqr = [1, -1][len(self.bases) % 4 in (2, 3)] * math.prod(
-            b.sqr for b in self.bases
-        )
+        self.sqr = [1, -1][len(self.bases) % 4 in (2, 3)] * math.prod(b.sqr for b in self.bases)
         self.is_odd = len(self.bases) % 2 == 1
 
     @classmethod
@@ -64,19 +61,19 @@ class CliffordBasis(PlainReprMixin):
         return (len_self * len_other + len_common) % 2 == 0
 
     @property
-    def r(self) -> tuple[Self, int]:
+    def r(self) -> Iterable[tuple[Self, int]]:
         sign = [1, -1][len(self.bases) % 4 in (2, 3)]
 
-        return (self, sign)
+        return [(self, sign)]
 
     @property
-    def i(self) -> tuple[Self, int]:
+    def i(self) -> Iterable[tuple[Self, int]]:
         sign = [1, -1][len(self.bases) % 2 == 1]
 
-        return (self, sign)
+        return [(self, sign)]
 
     @property
-    def cl(self) -> tuple[Self, int]:
+    def cl(self) -> Iterable[tuple[Self, int]]:
         sign = [1, -1][len(self.bases) % 4 in (1, 2)]
 
-        return (self, sign)
+        return [(self, sign)]

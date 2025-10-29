@@ -2,13 +2,12 @@ import dataclasses
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
-from types import NotImplementedType
 from typing import Any, Self
 
 import colorful
-
 from algebrant.algebra.algebra import Algebra
 from algebrant.algebra.algebra_utils import MultiplicationMixin
+from algebrant.algebra.algebra_data import AlgebraData, algebra_mul
 from algebrant.operation_prios import PSEUDONUMBER_OP_PRIO
 from algebrant.symbols.symbol import Symbol
 from algebrant.symbols.symbols import Symbols
@@ -112,6 +111,38 @@ class PseudoNumberSymbols(Symbols[PseudoNumber]):
 
 
 BasisFactor = tuple[PseudoNumberSymbols, Any]
+Factor = Any
+
+
+@algebra_mul.register
+def _(
+    basis1: PseudoNumberSymbols, factor1: Factor, basis2: PseudoNumberSymbols, factor2: Factor
+) -> Iterable[tuple[PseudoNumberSymbols, Any]]:
+    new_factor = factor1 * factor2
+
+    new_symbol_powers = Counter(basis1.symbol_powers)
+    new_symbol_powers.update(basis2.symbol_powers)
+
+    if not any(
+        isinstance(symbol, PseudoScalar) and power == 2
+        for symbol, power in new_symbol_powers.items()
+    ):
+        return [(PseudoNumberSymbols(dict(new_symbol_powers)), new_factor)]
+
+    new_symbol_powers_2 = {}
+
+    for symbol, power in new_symbol_powers.items():
+        if isinstance(symbol, PseudoScalar) and power == 2:
+            new_factor *= symbol.sqr
+        else:
+            new_symbol_powers_2[symbol] = power
+
+    return [
+        (
+            PseudoNumberSymbols(new_symbol_powers_2),
+            new_factor,
+        )
+    ]
 
 
 class PseudoScalarAlgebra(Algebra[PseudoNumberSymbols], MultiplicationMixin):
@@ -131,73 +162,38 @@ class PseudoScalarAlgebra(Algebra[PseudoNumberSymbols], MultiplicationMixin):
     def cl(self) -> Self:
         return self.map_basis(lambda basis: [basis.cl])
 
-    def _mul(self, bf1: BasisFactor, bf2: BasisFactor) -> Iterable[BasisFactor]:
-        basis1, factor1 = bf1
-        basis2, factor2 = bf2
-
-        new_factor = factor1 * factor2
-
-        new_symbol_powers = Counter(basis1.symbol_powers)
-        new_symbol_powers.update(basis2.symbol_powers)
-
-        if not any(
-            isinstance(symbol, PseudoScalar) and power == 2
-            for symbol, power in new_symbol_powers.items()
-        ):
-            return [(self.basis_class(dict(new_symbol_powers)), new_factor)]
-
-        new_symbol_powers_2 = {}
-
-        for symbol, power in new_symbol_powers.items():
-            if isinstance(symbol, PseudoScalar) and power == 2:
-                new_factor *= symbol.sqr
-            else:
-                new_symbol_powers_2[symbol] = power
-
-        return [
-            (
-                self.basis_class(new_symbol_powers_2),
-                new_factor,
-            )
-        ]
-
-    def __mul__(self, other) -> Self | NotImplementedType:
-        return self._multiply(other, self._mul)
-
     @property
     def vector_conjugate(self) -> Self:
         return self._new(
-            {
-                new_basis: factor * extra_factor
-                for basis, factor in self.basis_factor.items()
-                for new_basis, extra_factor in [basis.vector_conjugate]
-            }
+            AlgebraData(
+                {
+                    new_basis: factor * extra_factor
+                    for basis, factor in self.basis_factor.items()
+                    for new_basis, extra_factor in [basis.vector_conjugate]
+                }
+            )
         )
 
 
 def make_I(*, sqr, grade, name="I") -> PseudoScalarAlgebra:
     return PseudoScalarAlgebra(
-        {
-            PseudoNumberSymbols(
-                {
-                    PseudoScalar(
-                        name=name, sqr=sqr, grade=grade, color=PSEUDONUMBER_COLOR
-                    ): 1
-                }
-            ): 1
-        },
+        AlgebraData(
+            {
+                PseudoNumberSymbols(
+                    {PseudoScalar(name=name, sqr=sqr, grade=grade, color=PSEUDONUMBER_COLOR): 1}
+                ): 1
+            }
+        ),
         basis_class=PseudoNumberSymbols,
         op_prio=PSEUDONUMBER_OP_PRIO,
     )
 
 
-def Sym_ps(name) -> PseudoScalarAlgebra:
+def Sym_ps(name, power=1) -> PseudoScalarAlgebra:
     return PseudoScalarAlgebra(
-        {
-            PseudoNumberSymbols(
-                {PseudoNumber(name=name, color=PSEUDONUMBER_COLOR): 1}
-            ): 1
-        },
+        AlgebraData(
+            {PseudoNumberSymbols({PseudoNumber(name=name, color=PSEUDONUMBER_COLOR): power}): 1}
+        ),
         basis_class=PseudoNumberSymbols,
         op_prio=PSEUDONUMBER_OP_PRIO,
     )

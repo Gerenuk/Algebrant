@@ -6,81 +6,99 @@ from types import NotImplementedType
 from typing import Any, Protocol, Self, Sequence, TypeVar
 
 from algebrant.algebra.algebra_utils import MultiplicationMixin
+from algebrant.algebra.algebra_data import AlgebraData, algebra_mul
 from algebrant.clifford.clifford_basis import CliffordBasis
 from algebrant.clifford.clifford_basis_vec import CliffordBasisVec
-from algebrant.graded.graded_algebra import GradedAlgebra
+from algebrant.graded.graded_algebra import GradedAlgebra, commute
 
+Factor = Any
 BasisFactor = tuple[CliffordBasis, Any]
 
 
-class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
-    def _new(self, basis_factor: dict[CliffordBasis, Any]) -> Self:
-        """
-        used to create results with appropriate initialization of the same properties
-        """
-        return self.__class__(  # TODO: generalize?
-            basis_factor={
-                basis: factor
-                for basis, factor in basis_factor.items()
-                if abs(factor) > 1e-10  # TODO
-            },
-            basis_class=self.basis_class,
-            op_prio=self.op_prio,
-        )
+@algebra_mul.register
+def _(
+    basis1: CliffordBasis, factor1: Any, basis2: CliffordBasis, factor2: Any
+) -> Iterable[tuple[CliffordBasis, Any]]:
+    result = []
 
-    def _mul(
-        self, bf1: BasisFactor, bf2: BasisFactor
-    ) -> Iterable[tuple[BasisFactor, Any]]:
-        basis1, factor1 = bf1
-        basis2, factor2 = bf2
-
+    for basis1, factor2 in commute(basis1, factor2):
         result_bases, is_negative = ga_basis_mul(basis1.bases, basis2.bases)
         sign = [1, -1][is_negative]
 
         common_bases = set(basis1.bases) & set(basis2.bases)
         sign *= math.prod(b.sqr for b in common_bases)
 
-        return [(self.basis_class(tuple(result_bases)), sign * factor1 * factor2)]
+        result.append((CliffordBasis(tuple(result_bases)), sign * factor1 * factor2))
 
-    def __mul__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, self._mul)
+    return result
 
+
+class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
+    def _new(self, basis_factor: AlgebraData[CliffordBasis]) -> Self:
+        """
+        used to create results with appropriate initialization of the same properties
+        """
+        return self.__class__(  # TODO: generalize?
+            basis_factor=AlgebraData(
+                {
+                    basis: factor
+                    for basis, factor in basis_factor
+                    if abs(factor) > 1e-10  # TODO
+                }
+            ),
+            basis_class=self.basis_class,
+            op_prio=self.op_prio,
+        )
+
+    @staticmethod
     def _xor(
-        self, bf1: BasisFactor, bf2: BasisFactor
+        basis1: CliffordBasis, factor1: Factor, basis2: CliffordBasis, factor2: Factor
     ) -> Iterable[tuple[BasisFactor, Any]]:
-        if set(bf1[0].bases) & set(bf2[0].bases):
+        if set(basis1.bases) & set(basis2.bases):
             return []
 
-        return self._mul(bf1, bf2)
+        return algebra_mul(basis1, factor1, basis2, factor2)
 
     def __xor__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, self._xor)
+        return self._mul(other, self._xor)
 
+    @staticmethod
     def _lshift(
-        self, bf1: BasisFactor, bf2: BasisFactor
+        basis1: CliffordBasis, factor1: Factor, basis2: CliffordBasis, factor2: Factor
     ) -> Iterable[tuple[BasisFactor, Any]]:
-        if not set(bf1[0].bases) <= set(bf2[0].bases):
+        if not set(basis1.bases) <= set(basis2.bases):
             return []
 
-        return self._mul(bf1, bf2)
+        return algebra_mul(basis1, factor1, basis2, factor2)
 
     def __lshift__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, self._lshift)
+        return self._mul(other, self._lshift)
 
+    @staticmethod
     def _rshift(
-        self, bf1: BasisFactor, bf2: BasisFactor
+        basis1: CliffordBasis, factor1: Factor, basis2: CliffordBasis, factor2: Factor
     ) -> Iterable[tuple[BasisFactor, Any]]:
-        if not set(bf1[0].bases) >= set(bf2[0].bases):
+        if not set(basis1.bases) >= set(basis2.bases):
             return []
 
-        return self._mul(bf1, bf2)
+        return algebra_mul(basis1, factor1, basis2, factor2)
 
     def __rshift__(self, other: Any) -> Self | NotImplementedType:
-        return self._multiply(other, self._rshift)
+        return self._mul(other, self._rshift)
 
     @property
     def scalar(self) -> Any:
-        return self.basis_factor.get(CliffordBasis(tuple()), 0)
+        return self.basis_factor.to_dict.get(CliffordBasis(tuple()), 0)  # TODO: why access?
+
+    @property
+    def sqr(self) -> Any:
+        result = self * self
+        if not result.grades <= {0}:
+            raise ValueError(
+                f".sqr is expected to be used only with elements which square to a scalar. however, the result had grades {self.grades}: {result}"
+            )
+
+        return result.scalar
 
     def __rtruediv__(self, numer):
         # TODO: rule for algebra split
@@ -105,7 +123,7 @@ class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
         #################################### Divide by plain scalar
         if grades == {0}:
             # print("Scalar")
-            return numer * (1 / self.scalar_part)
+            return numer * (1 / self.scalar)
 
         #################################### Test if flipping non-scalar is enough
         scalar_sqr, non_scalar_sqr = sqr_to_scalar(self)
@@ -126,11 +144,7 @@ class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
         # this can save 1 step instead of doing Clifford conjugation and also is needed for higher even dim.
 
         dimension = len(
-            set(
-                itertools.chain.from_iterable(
-                    basis.bases for basis in self.basis_factor.keys()
-                )
-            )
+            set(itertools.chain.from_iterable(basis.bases for basis in self.basis_factor.keys()))
         )
 
         if grades <= {0, 1, dimension - 1, dimension}:
@@ -162,13 +176,9 @@ class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
                 scalar = scalar_sqr - non_scalar_sqr
 
                 if scalar == 0:
-                    raise ZeroDivisionError(
-                        f"Zero division 1/((s+M)(s-M)) for {new_inverse}"
-                    )
+                    raise ZeroDivisionError(f"Zero division 1/((s+M)(s-M)) for {new_inverse}")
 
-                inv_of_new_inverse = new_inverse.flip_grade_signs(lambda g: g > 0) * (
-                    1 / scalar
-                )
+                inv_of_new_inverse = new_inverse.flip_grade_signs(lambda g: g > 0) * (1 / scalar)
 
             return numer * flipped_sign_mv * inv_of_new_inverse
 
@@ -205,7 +215,7 @@ class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
                 raise ZeroDivisionError(f"Zero division 1/(A*A.r) for {self}")
 
             if new_inverse.grades == {0}:
-                new_inverse = new_inverse.scalar_part
+                new_inverse = new_inverse.scalar
 
             return numer * self.r * (1 / new_inverse)
 
@@ -215,7 +225,7 @@ class CliffordAlgebra(GradedAlgebra[CliffordBasis], MultiplicationMixin):
         max_steps = 2 ** math.floor((dimension + 1) / 2)
         inv = self
         for i in range(1, max_steps + 1):
-            A = inv - max_steps * inv.scalar_part / i
+            A = inv - max_steps * inv.scalar / i
             inv = self * A  # will clip small coefficients
             if inv.grades <= {0}:
                 break
@@ -290,26 +300,31 @@ def ga_basis_mul(
     return basis, is_negative
 
 
-def Cl_vec(*names: str | int) -> CliffordAlgebra:
+def Cl_vec(*names: str | int, sqr: int | list = 1) -> CliffordAlgebra:
     str_names = [name if isinstance(name, str) else f"e{name}" for name in names]
 
+    if not isinstance(sqr, list):
+        sqr = [sqr] * len(str_names)
+
     return CliffordAlgebra(
-        {
-            CliffordBasis(
-                tuple(
-                    CliffordBasisVec(name=name, sqr=1 if not name[0].isupper() else -1)
-                    for name in str_names
-                )
-            ): 1
-        },
+        AlgebraData(
+            {
+                CliffordBasis(
+                    tuple(
+                        CliffordBasisVec(name=name, sqr=sqr)
+                        for name, sqr in zip(str_names, sqr, strict=True)
+                    )
+                ): 1
+            }
+        ),
         basis_class=CliffordBasis,
     )
 
 
-def Cl_basis_vec(name: str | int, sqr=1) -> CliffordAlgebra:
-    str_name = name if isinstance(name, str) else f"e{name}"
+# def Cl_basis_vec(name: str | int, sqr=1) -> CliffordAlgebra:
+#     str_name = name if isinstance(name, str) else f"e{name}"
 
-    return CliffordAlgebra(
-        {CliffordBasis((CliffordBasisVec(name=str_name, sqr=sqr),)): 1},
-        basis_class=CliffordBasis,
-    )
+#     return CliffordAlgebra(
+#         {CliffordBasis((CliffordBasisVec(name=str_name, sqr=sqr),)): 1},
+#         basis_class=CliffordBasis,
+#     )

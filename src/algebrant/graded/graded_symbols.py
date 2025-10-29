@@ -1,7 +1,8 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Self
 
-from algebrant.algebra.algebra import BasisSortKey
+from algebrant.algebra.basis import BasisSortKey
 from algebrant.graded.graded_symbol import GradedSymbol
 from algebrant.symbols.nc_symbols import NCSymbols
 from algebrant.utils import all_not_none
@@ -39,23 +40,31 @@ class GradedSymbols(NCSymbols[GradedSymbol]):
         return tuple(sym.grade for sym in self.symbols)
 
     @property
-    def i(self) -> tuple[Self, int]:
-        return (self, -1 if self.is_odd else 1)
+    def _i_sign(self) -> int:
+        return -1 if self.is_odd else 1
 
     @property
-    def r(self) -> tuple[Self, int]:
+    def i(self) -> Iterable[tuple[Self, int]]:
+        return [(self, self._i_sign)]
+
+    @property
+    def r(self) -> Iterable[tuple[Self, int]]:
         grades = self.grades
         if not all_not_none(grades):
-            raise ValueError(f"Cannot do .r due to missing grades {grades} in {self}")
+            raise ValueError(f"Cannot do .r_sign due to missing grades {grades} in {self}")
 
         sign = {1: -1, 0: 1}[sum(grade % 4 in (2, 3) for grade in grades) % 2]
-        return (self._create(tuple(reversed(self.symbols))), sign)
+        return [(self._create(tuple(reversed(self.symbols))), sign)]
 
     @property
-    def cl(self) -> tuple[Self, int]:
+    def cl(self) -> Iterable[tuple[Self, int]]:
         grades = self.grades
         if not all_not_none(grades):
-            raise ValueError(f"Cannot do .cl due to missing grades {grades} in {self}")
+            raise ValueError(f"Cannot do .cl_sign due to missing grades {grades} in {self}")
 
         sign = {1: -1, 0: 1}[sum(grade % 4 in (1, 2) for grade in grades) % 2]
-        return (self._create(tuple(reversed(self.symbols))), sign)
+        return [(self._create(tuple(reversed(self.symbols))), sign)]
+
+
+def i_map(basis: GradedSymbols, factor) -> Iterable[tuple[GradedSymbols, int]]:
+    return [(basis, getattr(factor, "i", factor) * basis._i_sign)]

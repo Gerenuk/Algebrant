@@ -2,23 +2,17 @@ import types
 from typing import Self, TypeVar
 
 from algebrant.algebra.algebra import Algebra
+from algebrant.algebra.algebra_data import AlgebraData
+from algebrant.graded.commute import commute
+from algebrant.graded.graded_protocol import GradedProtocol
 
-GradedBasis = TypeVar("GradedBasis")
+Factor = TypeVar("Factor")
 
 
-class GradedAlgebra[GradedBasis](Algebra):
+class GradedAlgebra[Basis: GradedProtocol](Algebra):
     """
     basis elements must be CliffordBases with tuples
     """
-
-    @staticmethod
-    def _basis_factor_conjugate(basis_factor):
-        basis, factor = basis_factor
-
-        if hasattr(factor, "vector_conjugate") and basis.is_odd:
-            return (basis, factor.vector_conjugate)
-
-        return (basis, factor)
 
     @property
     def i(self) -> Self:
@@ -27,12 +21,11 @@ class GradedAlgebra[GradedBasis](Algebra):
 
         satisfies (A * B).i = A.i * B.i
         """
-        return self.map_basisfactor(
-            lambda bf: [
-                (basis, bf[1].i * extra_factor) for basis, extra_factor in [bf[0].i]
+        return self.map(
+            lambda basis, factor: [
+                (basis_i, getattr(factor, "i", factor) * factor_i) for basis_i, factor_i in basis.i
             ]
         )
-        # return self.flip_grade_signs(lambda x: x % 2 == 1)
 
     @property
     def r(self) -> Self:
@@ -44,10 +37,11 @@ class GradedAlgebra[GradedBasis](Algebra):
 
         A*A.r cannot have grades 4k+{2,3}
         """
-        return self.map_basisfactor(
-            lambda bf: [
-                self._basis_factor_conjugate((basis, bf[1].r * extra_factor))
-                for basis, extra_factor in [bf[0].r]
+        return self.map(
+            lambda basis, factor: [
+                (basis_comm, factor_r * factor_comm)
+                for basis_r, factor_r in basis.r
+                for basis_comm, factor_comm in commute(basis_r, getattr(factor, "r", factor))
             ]
         )
 
@@ -61,12 +55,28 @@ class GradedAlgebra[GradedBasis](Algebra):
 
         A*A.c cannot have grades 4k+{1,2}
         """
-        return self.map_basisfactor(
-            lambda bf: [
-                self._basis_factor_conjugate((basis, bf[1].cl * extra_factor))
-                for basis, extra_factor in [bf[0].cl]
+        return self.map(
+            lambda basis, factor: [
+                (basis_comm, factor_cl * factor_comm)
+                for basis_cl, factor_cl in basis.cl
+                for basis_comm, factor_comm in commute(basis_cl, getattr(factor, "cl", factor))
             ]
         )
+
+    @property
+    def scalar(self) -> Factor | float:
+        """
+        Returns the scalar part of the algebra, which is the part with grade 0.
+        """
+        result = [factor for basis, factor in self.basis_factor if basis.grade == 0]
+
+        if len(result) > 1:
+            raise ValueError(f"Expected only one scalar part, got {len(result)}: {result}")
+
+        if len(result) == 0:
+            return 0
+
+        return result[0]
 
     def take_grades(self, *grades) -> Self:
         if grades and isinstance(grades[0], types.FunctionType):
@@ -74,20 +84,35 @@ class GradedAlgebra[GradedBasis](Algebra):
         else:
             grade_test_func = lambda g: g in grades  # noqa: E731
 
-        return self._new(
-            {
-                basis: factor
-                for basis, factor in self.basis_factor.items()
-                if grade_test_func(basis.grade)
-            }
+        return self._new(  # TODO: generalize
+            AlgebraData(
+                {
+                    basis: factor
+                    for basis, factor in self.basis_factor
+                    if grade_test_func(basis.grade)
+                }
+            )
         )
 
     @property
-    def grades(self) -> frozenset[int | None]:
-        return frozenset(basis.grade for basis in self.basis_factor.keys())
+    def grades(self) -> frozenset[int | None]:  # TODO: remove somehow?
+        return frozenset(basis.grade for basis, _ in self.basis_factor)
 
     def split_into_grades(self) -> dict[int | None, Self]:
         """
         Split the algebra into grades
         """
         return {grade: self.take_grades(grade) for grade in self.grades}
+
+    @property
+    def sqr(self):
+        """
+        returns square of element as scalar, but throws exception is square is not scalar
+        """
+        result = self * self
+        if not result.grades <= {0}:
+            raise ValueError(
+                f".sqr is expected to be used only with elements which square to a scalar. however, the result had grades {self.grades}: {result}"
+            )
+
+        return result.scalar

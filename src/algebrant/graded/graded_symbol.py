@@ -1,25 +1,12 @@
-from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Self
 
 import colorful as cf
-
-from algebrant.graded.graded_protocol import GradedProtocol
 from algebrant.repr_printer import PlainReprMixin
 from algebrant.symbols.symbol import Symbol
-from algebrant.utils import all_not_none, calculated_field
+from algebrant.utils import calculated_field
 
 vector_color = cf.yellow  # type: ignore
 multivector_color = cf.orange  # type: ignore
-
-
-def get_valid_grades(elems: Iterable[GradedProtocol]) -> Sequence[int] | None:
-    grades = [elem.grade for elem in elems]
-
-    if not all_not_none(grades):
-        return None
-
-    return grades
 
 
 @dataclass(unsafe_hash=True, order=True, repr=False)
@@ -32,16 +19,10 @@ class GradedSymbol(Symbol, PlainReprMixin):
     power: int = 1  # TODO: split into version without power?
     is_odd: bool = calculated_field()
     grade: int | None = calculated_field()
-    r: tuple[Self, int] = calculated_field()
 
     def __post_init__(self) -> None:
         self.is_odd = bool((self.base_grade * self.power) % 2)
         self.grade = self.base_grade if self.power == 1 else None
-        self.r = (
-            (self, -1 if self.power % 2 == 1 else 1)
-            if self.base_grade % 4 in (2, 3)
-            else (self, 1)
-        )
 
     def _repr_pretty_(self, printer, cycle) -> None:
         if cycle:

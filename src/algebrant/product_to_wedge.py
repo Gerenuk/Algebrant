@@ -1,7 +1,6 @@
 from collections.abc import Iterable
 from typing import Any
 
-from algebrant.algebra.operations import algebra_map_basis
 from algebrant.graded.graded_symbol_algebra import GradedSymbolAlgebra
 from algebrant.graded.graded_symbols import GradedSymbols
 from algebrant.wedge.wedge import Wedge, WedgeableSymbol
@@ -29,6 +28,4 @@ def _map_to_wedge(basis: GradedSymbols) -> Iterable[tuple[Wedge, Any]]:
 
 
 def product_to_wedge(expr: GradedSymbolAlgebra) -> WedgeAlgebra:
-    return WedgeAlgebra(
-        dict(algebra_map_basis(expr.basis_factor.items(), _map_to_wedge))
-    )
+    return WedgeAlgebra(dict(algebra_map_basis(expr.basis_factor.items(), _map_to_wedge)))

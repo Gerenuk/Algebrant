@@ -1,24 +1,23 @@
+import dataclasses
 from dataclasses import dataclass
 from fractions import Fraction
-from typing import Any, Self, TypeVar
+from typing import Any, Self
 
-from algebrant.algebra.algebra import BasisSortKey
+from algebrant.algebra.basis import BasisSortKey
 from algebrant.repr_printer import PlainReprMixin
 from algebrant.symbols.symbol import Symbol
 
-SymbolType = TypeVar("SymbolType", bound=Symbol)
+# SymbolType = TypeVar("SymbolType", bound=Symbol)
 
 
 @dataclass(repr=False)
-class Symbols[SymbolType](PlainReprMixin):
+class Symbols[SymbolType: Symbol](PlainReprMixin):
     symbol_powers: dict[SymbolType, Any]  # TODO: int?
 
     def __post_init__(self) -> None:
         if any(x == 0 for x in self.symbol_powers.values()):
             self.symbol_powers = {
-                symbol: power
-                for symbol, power in self.symbol_powers.items()
-                if power != 0
+                symbol: power for symbol, power in self.symbol_powers.items() if power != 0
             }
 
     @classmethod
@@ -29,14 +28,10 @@ class Symbols[SymbolType](PlainReprMixin):
     def is_unity(self) -> bool:
         return not self.symbol_powers
 
-    def conjugate(self, factor) -> tuple[Self, Any]:
-        return (
-            self._new(
-                symbol_powers={
-                    sym.conjugate(): cnt for sym, cnt in self.symbol_powers.items()
-                }
-            ),
-            factor.conjugate(),
+    def conjugate(self) -> Self:
+        return dataclasses.replace(
+            self,
+            symbol_powers={sym.conjugate(): cnt for sym, cnt in self.symbol_powers.items()},
         )
 
     def __hash__(self) -> int:
@@ -48,20 +43,13 @@ class Symbols[SymbolType](PlainReprMixin):
     @property
     def sort_key(self) -> BasisSortKey:
         degree = sum(abs(power) for _sym, power in self.symbol_powers.items())
-        sorted_symbols = sorted(
-            self.symbol_powers.keys(), key=lambda x: (x.name, x.is_conjugate)
-        )
+        sorted_symbols = sorted(self.symbol_powers.keys(), key=lambda x: (x.name, x.is_conjugate))
 
         return (
             (degree, len(self.symbol_powers))
             + tuple(self.symbol_powers[sym] for sym in sorted_symbols),
             tuple(sym.name for sym in sorted_symbols),
         )
-
-    # def inverse(self):
-    #     return {
-    #         self._new({sym: -power for sym, power in self.symbol_powers.items()}): 1
-    #     }
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:

@@ -17,7 +17,7 @@ TODO:
 
 
 class VecBasis:
-    def __init__(self, basis_vecs, *, dot, names=None, min_abs=1e-8) -> None:
+    def __init__(self, basis_vecs, *, dot, names=None, min_abs=1e-7) -> None:
         """
         basis_vecs need only scalar multiplication and the provided dot function
         dot non-degenerate, but not necessarily symmetric (e.g. lambda a, b: a @ T @ b)
@@ -42,9 +42,7 @@ class VecBasis:
         else:
             self.names = [f"e{i}" for i in range(1, len(basis_vecs) + 1)]
 
-        self.gram_matrix = np.array(
-            [[dot(b1, b2) for b2 in basis_vecs] for b1 in basis_vecs]
-        )
+        self.gram_matrix = np.array([[dot(b1, b2) for b2 in basis_vecs] for b1 in basis_vecs])
 
         # TODO: hack since linalg cannot for float128
         if self.gram_matrix.dtype == np.float128:
@@ -59,9 +57,7 @@ class VecBasis:
         self.dual_basis_vecs = [  # currently used only for .trace()
             sum(
                 coef * vec
-                for coef, vec in zip(
-                    self.inv_gram_matrix[i, :], self.basis_vecs, strict=True
-                )
+                for coef, vec in zip(self.inv_gram_matrix[i, :], self.basis_vecs, strict=True)
             )
             for i in range(self.dim)
         ]
@@ -78,13 +74,15 @@ class VecBasis:
 
         coefs = self.inv_gram_matrix @ coef0
 
+        coefs[np.isclose(coefs, 0, atol=self.min_abs)] = 0  # TODO: tolerance?
+
         if verify:
             elem_from_coef = self.to_vec(coefs)
 
             abs_val = None
 
             if isinstance(elem_from_coef, np.ndarray):
-                is_equal = np.all(np.isclose(elem_from_coef, vec))
+                is_equal = np.all(np.isclose(elem_from_coef, vec, atol=self.min_abs))
             else:
                 try:
                     abs_val = abs(elem_from_coef - vec)
@@ -172,9 +170,7 @@ class ConvertVecBasis:
     def __init__(self, *vec_basis_list):
         dims = set(v.dim for v in vec_basis_list)
         if len(dims) != 1:
-            raise ValueError(
-                f"Inconsistent dimensions {[v.dim for v in vec_basis_list]}"
-            )
+            raise ValueError(f"Inconsistent dimensions {[v.dim for v in vec_basis_list]}")
 
         self.dim = next(iter(dims))  # used only for __repr__
 

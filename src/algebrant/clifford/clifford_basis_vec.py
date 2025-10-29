@@ -7,14 +7,18 @@ try:
     import colorful
 
     colorful.use_true_colors()  # type: ignore
-    vec_col = colorful.deepSkyBlue  # type: ignore
+    pos_vec_col = colorful.deepSkyBlue  # type: ignore
     neg_vec_col = colorful.yellowGreen  # type: ignore
+    other_vec_col = colorful.lightSlateBlue  # type: ignore
 except ImportError:
 
-    def vec_col(x):
+    def pos_vec_col(x):
         return x
 
     def neg_vec_col(x):
+        return x
+
+    def other_vec_col(x):
         return x
 
 
@@ -27,9 +31,11 @@ class CliffordBasisVec(PlainReprMixin):
         if cycle:
             return printer.text("...")
 
-        if self.sqr == -1:
+        if self.sqr == 1:
+            col_str = pos_vec_col(self.name)
+        elif self.sqr == -1:
             col_str = neg_vec_col(self.name)
         else:
-            col_str = vec_col(self.name)
+            col_str = other_vec_col(self.name)
 
-        printer.text(str(col_str))
+        printer.pretty(col_str)

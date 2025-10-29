@@ -72,9 +72,7 @@ class Quotient:
         raise NotImplementedError("Equality not implemented")
 
     def conjugate(self):
-        return Quotient(
-            conjugate(self.numer), conjugate(self.denom), op_prio=self.op_prio
-        )
+        return Quotient(conjugate(self.numer), conjugate(self.denom), op_prio=self.op_prio)
 
     def _repr_pretty_(self, printer, cycle):
         if cycle:

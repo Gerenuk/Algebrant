@@ -1,9 +1,20 @@
-from .clifford.clalg import ClAlg
-from .clifford.clifford_algebra import Cl_vec as E
-from .graded.graded_symbol_algebra import MV
-from .graded.pseudoscalar import Sym_ps, make_I
-from .product_to_wedge import product_to_wedge
-from .symbols import Sym
-from .wedge.wedge_algebra import MVw
+try:
+    # the library pretty-prints colorful.ColorfulString
+    # here we register a pretty printer so that colors are printed
 
-__all__ = ["MV", "Sym", "MVw", "product_to_wedge", "E", "ClAlg", "Sym_ps", "make_I"]
+    def color_print(obj, printer, is_cycle):
+        if is_cycle:
+            printer.text("(cycle)")
+
+        printer.text(str(obj))
+
+    import colorful
+    from IPython.core.getipython import get_ipython
+
+    colorful.use_true_colors()  # type: ignore
+
+    text_printer = get_ipython().display_formatter.formatters["text/plain"]  # type: ignore
+    text_printer.for_type(colorful.core.ColorfulString, color_print)
+
+except ImportError:
+    pass

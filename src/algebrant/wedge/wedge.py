@@ -1,11 +1,12 @@
 import itertools
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Iterable, Protocol, Self
 
-from algebrant.algebra.algebra import BasisSortKey
-from algebrant.graded.graded_symbol import GradedSymbol, get_valid_grades
+from algebrant.algebra.basis import BasisSortKey
+from algebrant.graded.graded_symbol import GradedSymbol
 from algebrant.repr_printer import PlainReprMixin
-from algebrant.utils import calculated_field
+from algebrant.utils import all_not_none, calculated_field
 
 WedgeableSortKey = tuple[tuple[int, ...], tuple[str, ...]]
 
@@ -23,6 +24,15 @@ class Wedgeable(Protocol):
 
     @property
     def wedge_sort_key(self) -> WedgeableSortKey: ...
+
+
+def get_valid_grades(elems: Iterable[Wedgeable]) -> Sequence[int] | None:
+    grades = [elem.grade for elem in elems]
+
+    if not all_not_none(grades):
+        return None
+
+    return grades
 
 
 @dataclass(unsafe_hash=True, repr=False)
@@ -71,26 +81,34 @@ BasisFactor = tuple["Wedge", Any]
 @dataclass(unsafe_hash=True, repr=False)
 class Wedge(PlainReprMixin):
     elems: tuple[Wedgeable, ...] = tuple()
-    grade: int | None = calculated_field()
+    grade: int = calculated_field()
     is_unity: bool = calculated_field()
     sort_key: BasisSortKey = calculated_field()
     is_odd: bool = calculated_field()
+    i: Iterable[tuple[Self, int]] = calculated_field()
+    r: Iterable[tuple[Self, int]] = calculated_field()
+    cl: Iterable[tuple[Self, int]] = calculated_field()
 
     def __post_init__(self) -> None:
         grades = get_valid_grades(self.elems)
         if grades is not None:
             self.grade = sum(grades)
         else:
-            self.grade = None
+            raise NotImplementedError("Wedgeable elements must have a valid grade.")
 
         self.is_odd = bool(sum(elem.is_odd for elem in self.elems) % 2)
 
         self.is_unity = not self.elems
 
+        factor_i = -1 if self.is_odd else 1
+        factor_r = -1 if self.grade % 4 in (2, 3) else 1
+
+        self.i = [(self, factor_i)]
+        self.r = [(self, factor_r)]
+        self.cl = [(self, factor_i * factor_r)]
+
         grade = self.grade
-        names = tuple(
-            itertools.chain.from_iterable(elem.wedge_sort_key[1] for elem in self.elems)
-        )
+        names = tuple(itertools.chain.from_iterable(elem.wedge_sort_key[1] for elem in self.elems))
 
         if grade is not None:
             self.sort_key = (
